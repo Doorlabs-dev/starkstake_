@@ -59,7 +59,6 @@ mod LiquidStakingProtocol {
         ls_token: ContractAddress,
         strk_address: ContractAddress,
         pool_contract: ContractAddress,
-        total_assets: u256,
         delegators: Map<u8, ContractAddress>,
         delegator_status: Map<u8, (bool, u64)>, // (is_available, available_time)
         withdrawal_requests: Map<(ContractAddress, u32), WithdrawalRequest>,
@@ -114,7 +113,6 @@ mod LiquidStakingProtocol {
         RBACEvent: RoleBasedAccessControlComponent::Event,
     }
 
-
     #[constructor]
     fn constructor(
         ref self: ContractState,
@@ -138,8 +136,6 @@ mod LiquidStakingProtocol {
         self.platform_fee_recipient.write(platform_fee_recipient);
         self.withdrawal_window_period.write(initial_withdrawal_window_period);
         self.min_deposit_amount.write(10_000_000_000_000_000_000); // min deposit is 10 STRK
-
-        self.total_assets.write(0);
 
         self.access_control.initialize(admin);
         self.access_control.grant_role(LIQUID_STAKING_ROLE, get_contract_address());
@@ -636,10 +632,6 @@ mod LiquidStakingProtocol {
 
     #[abi(embed_v0)]
     impl LiquidStakingViewImpl of ILiquidStakingView<ContractState> {
-        fn get_total_assets(self: @ContractState) -> u256 {
-            self.total_assets.read()
-        }
-
         fn get_fee_strategy(self: @ContractState) -> FeeStrategy {
             self.fee_strategy.read()
         }

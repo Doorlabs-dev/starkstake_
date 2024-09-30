@@ -13,7 +13,7 @@ struct WithdrawalRequest {
 }
 
 pub mod Events{
-    use starknet::ContractAddress;
+    use super::ContractAddress;
 
     #[derive(Drop, starknet::Event)]
     struct Deposit {
