@@ -1,8 +1,6 @@
 #[starknet::contract]
 mod LSToken {
-    use starknet::{
-        ContractAddress, ClassHash, get_caller_address, get_contract_address
-    };
+    use starknet::{ContractAddress, ClassHash, get_caller_address, get_contract_address};
     use core::num::traits::Bounded;
     use openzeppelin::token::erc20::ERC20Component;
     use openzeppelin::access::accesscontrol::AccessControlComponent;
@@ -14,14 +12,23 @@ mod LSToken {
 
     use stake_stark::components::access_control::RoleBasedAccessControlComponent;
 
-    use stake_stark::utils::constants::{ADMIN_ROLE, MINTER_ROLE, PAUSER_ROLE, UPGRADER_ROLE};
+    use stake_stark::utils::constants::{ADMIN_ROLE, MINTER_ROLE, BURNER_ROLE, PAUSER_ROLE, UPGRADER_ROLE};
+
+    use stake_stark::interfaces::{
+        i_liquid_staking::ILiquidStakingDispatcher,
+        i_liquid_staking::ILiquidStakingDispatcherTrait,
+        i_liquid_staking::ILiquidStakingViewDispatcher,
+        i_liquid_staking::ILiquidStakingViewDispatcherTrait
+    };
 
     // Component declarations
     component!(path: ERC20Component, storage: erc20, event: ERC20Event);
     component!(path: AccessControlComponent, storage: oz_access_control, event: AccessControlEvent);
     component!(path: UpgradeableComponent, storage: upgradeable, event: UpgradeableEvent);
     component!(path: PausableComponent, storage: pausable, event: PausableEvent);
-    component!(path: ReentrancyGuardComponent, storage: reentrancy_guard, event: ReentrancyGuardEvent);
+    component!(
+        path: ReentrancyGuardComponent, storage: reentrancy_guard, event: ReentrancyGuardEvent
+    );
     component!(path: SRC5Component, storage: src5, event: SRC5Event);
 
     component!(path: RoleBasedAccessControlComponent, storage: access_control, event: RBACEvent);
@@ -42,7 +49,8 @@ mod LSToken {
     impl UpgradeableInternalImpl = UpgradeableComponent::InternalImpl<ContractState>;
 
     #[abi(embed_v0)]
-    impl RoleBasedAccessControlImpl = RoleBasedAccessControlComponent::RoleBasedAccessControlImpl<ContractState>;
+    impl RoleBasedAccessControlImpl =
+        RoleBasedAccessControlComponent::RoleBasedAccessControlImpl<ContractState>;
     impl InternalImpl = RoleBasedAccessControlComponent::InternalImpl<ContractState>;
 
     // Constant
@@ -50,6 +58,7 @@ mod LSToken {
 
     #[storage]
     struct Storage {
+        liquid_staking_protocol: ContractAddress,
         asset: ContractAddress,
         total_assets: u256,
         #[substorage(v0)]
@@ -74,6 +83,7 @@ mod LSToken {
         Deposit: Deposit,
         Withdraw: Withdraw,
         Rebased: Rebased,
+        Redeem: Redeem,
         #[flat]
         ERC20Event: ERC20Component::Event,
         #[flat]
@@ -113,7 +123,17 @@ mod LSToken {
     }
 
     #[derive(Drop, starknet::Event)]
-    struct Rebased{
+    struct Redeem {
+        #[key]
+        caller: ContractAddress,
+        receiver: ContractAddress,
+        owner: ContractAddress,
+        assets: u256,
+        shares: u256
+    }
+
+    #[derive(Drop, starknet::Event)]
+    struct Rebased {
         old_total_assets: u256,
         new_total_assets: u256
     }
@@ -123,6 +143,7 @@ mod LSToken {
         ref self: ContractState,
         name: ByteArray,
         symbol: ByteArray,
+        liquid_staking_protocol: ContractAddress,
         asset: ContractAddress,
         admin: ContractAddress,
     ) {
@@ -130,6 +151,12 @@ mod LSToken {
 
         self.asset.write(asset);
         self.total_assets.write(0);
+
+        self.liquid_staking_protocol.write(liquid_staking_protocol);
+        
+        // Grant roles
+        self.access_control.grant_role(MINTER_ROLE, liquid_staking_protocol);
+        self.access_control.grant_role(BURNER_ROLE, liquid_staking_protocol);
     }
 
     #[generate_trait]
@@ -147,7 +174,7 @@ mod LSToken {
                 assets * INITIAL_SHARES_PER_ASSET
             } else {
                 (assets * self.erc20.total_supply()) / self.total_assets()
-            } 
+            }
         }
 
         fn convert_to_assets(self: @ContractState, shares: u256) -> u256 {
@@ -178,13 +205,14 @@ mod LSToken {
             assert(shares != 0, 'ZERO_SHARES');
 
             let caller = get_caller_address();
-            let asset_token = IERC20Dispatcher { contract_address: self.asset.read() };
-            
-            // Transfer assets from caller to this contract
-            asset_token.transfer_from(caller, get_contract_address(), assets);
 
-            // Mint shares to receiver
-            self.erc20.mint(receiver, shares);
+            // Call deposit function of LiquidStakingProtocol
+            let liquid_staking = ILiquidStakingDispatcher {
+                contract_address: self.liquid_staking_protocol.read()
+            };
+            let minted_shares = liquid_staking.deposit(assets);
+
+            assert(minted_shares == shares, 'Shares mismatch');
 
             // Update total assets
             self.total_assets.write(self.total_assets.read() + assets);
@@ -209,24 +237,24 @@ mod LSToken {
             } else {
                 (assets * self.erc20.total_supply() + self.total_assets() - 1) / self.total_assets()
             }
-        }        
+        }
 
         fn mint(ref self: ContractState, assets: u256, receiver: ContractAddress) -> u256 {
             self.access_control.assert_only_role(MINTER_ROLE);
             self.pausable.assert_not_paused();
             self.reentrancy_guard.start();
-        
+
             let shares = self.preview_mint(assets);
             assert(shares != 0, 'ZERO_SHARES');
-        
+
             // Mint shares to receiver
             self.erc20.mint(receiver, shares);
-        
+
             // Update total assets
             self.total_assets.write(self.total_assets.read() + assets);
-        
+
             self.emit(Deposit { sender: get_caller_address(), owner: receiver, assets, shares });
-        
+
             self.reentrancy_guard.end();
             shares
         }
@@ -248,30 +276,23 @@ mod LSToken {
         }
 
         fn withdraw(
-            ref self: ContractState, 
-            assets: u256, 
-            receiver: ContractAddress, 
-            owner: ContractAddress
+            ref self: ContractState, assets: u256, receiver: ContractAddress, owner: ContractAddress
         ) -> u256 {
             self.pausable.assert_not_paused();
             self.reentrancy_guard.start();
 
-            let shares = self.preview_withdraw(assets);
-            assert(shares != 0, 'ZERO_SHARES');
-
             let caller = get_caller_address();
+            let shares = self.preview_withdraw(assets);
+
             if caller != owner {
                 let allowed = self.erc20.allowance(owner, caller);
                 assert(allowed >= shares, 'EXCEED_ALLOWANCE');
                 self.erc20._approve(owner, caller, allowed - shares);
             }
-
-            self.erc20.burn(owner, shares);
-
-            let asset_token = IERC20Dispatcher { contract_address: self.asset.read() };
-            asset_token.transfer(receiver, assets);
-
-            self.total_assets.write(self.total_assets.read() - assets);
+            
+            // Call request_withdrawal function of LiquidStakingProtocol
+            let liquid_staking = ILiquidStakingDispatcher { contract_address: self.liquid_staking_protocol.read() };
+            liquid_staking.request_withdrawal(shares);
 
             self.emit(Withdraw { sender: caller, receiver, owner, assets, shares });
 
@@ -292,16 +313,10 @@ mod LSToken {
         }
 
         fn redeem(
-            ref self: ContractState, 
-            shares: u256, 
-            receiver: ContractAddress, 
-            owner: ContractAddress
+            ref self: ContractState, shares: u256, receiver: ContractAddress, owner: ContractAddress
         ) -> u256 {
             self.pausable.assert_not_paused();
             self.reentrancy_guard.start();
-
-            let assets = self.preview_redeem(shares);
-            assert(assets != 0, 'ZERO_ASSETS');
 
             let caller = get_caller_address();
             if caller != owner {
@@ -310,14 +325,13 @@ mod LSToken {
                 self.erc20._approve(owner, caller, allowed - shares);
             }
 
-            self.erc20.burn(owner, shares);
+            let assets = self.preview_redeem(shares);
+            
+            // Call request_withdrawal function of LiquidStakingProtocol
+            let liquid_staking = ILiquidStakingDispatcher { contract_address: self.liquid_staking_protocol.read() };
+            liquid_staking.request_withdrawal(shares);
 
-            let asset_token = IERC20Dispatcher { contract_address: self.asset.read() };
-            asset_token.transfer(receiver, assets);
-
-            self.total_assets.write(self.total_assets.read() - assets);
-
-            self.emit(Withdraw { sender: caller, receiver, owner, assets, shares });
+            self.emit(Redeem { caller, receiver, owner, assets, shares });
 
             self.reentrancy_guard.end();
             assets
@@ -348,9 +362,19 @@ mod LSToken {
     }
 
     #[generate_trait]
-    impl UpgradeableFunctions of UpgradeableFunctionsTrait {
-        fn upgrade(ref self: ContractState, new_class_hash: ClassHash) {
-            self.access_control.assert_only_role(UPGRADER_ROLE);
+    impl AdminFunctions of AdminFunctionsTrait {
+        fn pause(ref self: ContractState) {
+            self.access_control.assert_only_role(PAUSER_ROLE);
+            self.pausable.pause();
+        }
+
+        fn unpause(ref self: ContractState) {
+            self.access_control.assert_only_role(PAUSER_ROLE);
+            self.pausable.unpause();
+        }
+
+        fn upgrade(ref self: ContractState, new_class_hash: starknet::ClassHash) {
+            self.access_control.assert_only_role(ADMIN_ROLE);
             self.upgradeable.upgrade(new_class_hash);
         }
     }

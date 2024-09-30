@@ -1,6 +1,6 @@
 use starknet::ContractAddress;
 // Fee Strategy enum for the Strategy pattern
-#[derive(Drop, Copy, Serde, starknet::Store)]
+#[derive(Drop, Copy, Serde, PartialEq, starknet::Store)]
 enum FeeStrategy {
     Flat: u16,
     Tiered: (u16, u16, u256), // (low_fee, high_fee, threshold)
