@@ -16,7 +16,9 @@ mod Delegator {
 
     use stake_stark::components::access_control::RoleBasedAccessControlComponent;
     use stake_stark::interfaces::{
-        i_delegator::IDelegator, i_starknet_staking::IPoolDispatcher,
+        i_delegator::IDelegator, 
+        i_delegator::Events,
+        i_starknet_staking::IPoolDispatcher,
         i_starknet_staking::IPoolDispatcherTrait
     };
 
@@ -69,10 +71,10 @@ mod Delegator {
     #[event]
     #[derive(Drop, starknet::Event)]
     enum Event {
-        Delegated: Delegated,
-        WithdrawalRequested: WithdrawalRequested,
-        WithdrawalProcessed: WithdrawalProcessed,
-        RewardsClaimed: RewardsClaimed,
+        Delegated: Events::Delegated,
+        WithdrawalRequested: Events::WithdrawalRequested,
+        WithdrawalProcessed: Events::WithdrawalProcessed,
+        RewardsClaimed: Events::RewardsClaimed,
         #[flat]
         AccessControlEvent: AccessControlComponent::Event,
         #[flat]
@@ -87,25 +89,6 @@ mod Delegator {
         RBACEvent: RoleBasedAccessControlComponent::Event,
     }
 
-    #[derive(Drop, starknet::Event)]
-    struct Delegated {
-        amount: u256,
-    }
-
-    #[derive(Drop, starknet::Event)]
-    struct WithdrawalRequested {
-        amount: u256,
-    }
-
-    #[derive(Drop, starknet::Event)]
-    struct WithdrawalProcessed {
-        amount: u256,
-    }
-
-    #[derive(Drop, starknet::Event)]
-    struct RewardsClaimed {
-        amount: u256,
-    }
 
     /// Initializes the Delegator contract
     /// @param liquid_staking_protocol: Address of the liquid staking protocol
@@ -157,7 +140,7 @@ mod Delegator {
 
             self.total_stake.write(self.total_stake.read() + amount);
 
-            self.emit(Delegated { amount });
+            self.emit(Events::Delegated { amount });
             self.reentrancy_guard.end();
         }
 
@@ -174,7 +157,7 @@ mod Delegator {
 
             self.total_stake.write(self.total_stake.read() - amount);
 
-            self.emit(WithdrawalRequested { amount });
+            self.emit(Events::WithdrawalRequested { amount });
 
             self.reentrancy_guard.end();
         }
@@ -195,7 +178,7 @@ mod Delegator {
             let strk_token = IERC20Dispatcher { contract_address: self.strk_token.read() };
             strk_token.transfer(self.liquid_staking_protocol.read(), withdrawn_amount);
 
-            self.emit(WithdrawalProcessed { amount: withdrawn_amount });
+            self.emit(Events::WithdrawalProcessed { amount: withdrawn_amount });
 
             self.reentrancy_guard.end();
             withdrawn_amount
@@ -216,7 +199,7 @@ mod Delegator {
 
             self.last_reward_claim_time.write(get_block_timestamp());
 
-            self.emit(RewardsClaimed { amount: rewards });
+            self.emit(Events::RewardsClaimed { amount: rewards });
 
             self.reentrancy_guard.end();
             rewards

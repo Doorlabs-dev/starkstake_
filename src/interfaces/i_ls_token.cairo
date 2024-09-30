@@ -1,5 +1,47 @@
 use starknet::ContractAddress;
 
+mod Events{
+    use super::ContractAddress;
+
+    #[derive(Drop, starknet::Event)]
+    struct Deposit {
+        #[key]
+        sender: ContractAddress,
+        #[key]
+        owner: ContractAddress,
+        assets: u256,
+        shares: u256
+    }
+
+    #[derive(Drop, starknet::Event)]
+    struct Withdraw {
+        #[key]
+        sender: ContractAddress,
+        #[key]
+        receiver: ContractAddress,
+        #[key]
+        owner: ContractAddress,
+        assets: u256,
+        shares: u256
+    }
+
+    #[derive(Drop, starknet::Event)]
+    struct Redeem {
+        #[key]
+        caller: ContractAddress,
+        receiver: ContractAddress,
+        owner: ContractAddress,
+        assets: u256,
+        shares: u256
+    }
+
+    #[derive(Drop, starknet::Event)]
+    struct Rebased {
+        old_total_assets: u256,
+        new_total_assets: u256
+    }
+}
+
 #[starknet::interface]
 trait ILSToken<TContractState> {
     fn asset(self: @TContractState) -> ContractAddress;

@@ -15,6 +15,8 @@ mod LSToken {
     use stake_stark::utils::constants::{ADMIN_ROLE, MINTER_ROLE, BURNER_ROLE, PAUSER_ROLE, UPGRADER_ROLE};
 
     use stake_stark::interfaces::{
+        i_ls_token::ILSToken,
+        i_ls_token::Events,
         i_liquid_staking::ILiquidStakingDispatcher,
         i_liquid_staking::ILiquidStakingDispatcherTrait,
         i_liquid_staking::ILiquidStakingViewDispatcher,
@@ -80,10 +82,10 @@ mod LSToken {
     #[event]
     #[derive(Drop, starknet::Event)]
     enum Event {
-        Deposit: Deposit,
-        Withdraw: Withdraw,
-        Rebased: Rebased,
-        Redeem: Redeem,
+        Deposit: Events::Deposit,
+        Withdraw: Events::Withdraw,
+        Rebased: Events::Rebased,
+        Redeem: Events::Redeem,
         #[flat]
         ERC20Event: ERC20Component::Event,
         #[flat]
@@ -98,44 +100,6 @@ mod LSToken {
         SRC5Event: SRC5Component::Event,
         #[flat]
         RBACEvent: RoleBasedAccessControlComponent::Event,
-    }
-
-    #[derive(Drop, starknet::Event)]
-    struct Deposit {
-        #[key]
-        sender: ContractAddress,
-        #[key]
-        owner: ContractAddress,
-        assets: u256,
-        shares: u256
-    }
-
-    #[derive(Drop, starknet::Event)]
-    struct Withdraw {
-        #[key]
-        sender: ContractAddress,
-        #[key]
-        receiver: ContractAddress,
-        #[key]
-        owner: ContractAddress,
-        assets: u256,
-        shares: u256
-    }
-
-    #[derive(Drop, starknet::Event)]
-    struct Redeem {
-        #[key]
-        caller: ContractAddress,
-        receiver: ContractAddress,
-        owner: ContractAddress,
-        assets: u256,
-        shares: u256
-    }
-
-    #[derive(Drop, starknet::Event)]
-    struct Rebased {
-        old_total_assets: u256,
-        new_total_assets: u256
     }
 
     #[constructor]
@@ -159,8 +123,8 @@ mod LSToken {
         self.access_control.grant_role(BURNER_ROLE, liquid_staking_protocol);
     }
 
-    #[generate_trait]
-    impl LSTokenImpl of ILSToken {
+    #[abi(embed_v0)]
+    impl LSTokenImpl of ILSToken<ContractState> {
         fn asset(self: @ContractState) -> ContractAddress {
             self.asset.read()
         }
@@ -217,7 +181,7 @@ mod LSToken {
             // Update total assets
             self.total_assets.write(self.total_assets.read() + assets);
 
-            self.emit(Deposit { sender: caller, owner: receiver, assets, shares });
+            self.emit(Events::Deposit { sender: caller, owner: receiver, assets, shares });
 
             self.reentrancy_guard.end();
             shares
@@ -253,7 +217,7 @@ mod LSToken {
             // Update total assets
             self.total_assets.write(self.total_assets.read() + assets);
 
-            self.emit(Deposit { sender: get_caller_address(), owner: receiver, assets, shares });
+            self.emit(Events::Deposit { sender: get_caller_address(), owner: receiver, assets, shares });
 
             self.reentrancy_guard.end();
             shares
@@ -294,7 +258,7 @@ mod LSToken {
             let liquid_staking = ILiquidStakingDispatcher { contract_address: self.liquid_staking_protocol.read() };
             liquid_staking.request_withdrawal(shares);
 
-            self.emit(Withdraw { sender: caller, receiver, owner, assets, shares });
+            self.emit(Events::Withdraw { sender: caller, receiver, owner, assets, shares });
 
             self.reentrancy_guard.end();
             shares
@@ -331,7 +295,7 @@ mod LSToken {
             let liquid_staking = ILiquidStakingDispatcher { contract_address: self.liquid_staking_protocol.read() };
             liquid_staking.request_withdrawal(shares);
 
-            self.emit(Redeem { caller, receiver, owner, assets, shares });
+            self.emit(Events::Redeem { caller, receiver, owner, assets, shares });
 
             self.reentrancy_guard.end();
             assets
@@ -342,7 +306,7 @@ mod LSToken {
             let old_total_assets = self.total_assets.read();
             self.total_assets.write(new_total_assets);
 
-            self.emit(Rebased { old_total_assets, new_total_assets });
+            self.emit(Events::Rebased { old_total_assets, new_total_assets });
         }
 
         fn burn(ref self: ContractState, share: u256, caller: ContractAddress) {
