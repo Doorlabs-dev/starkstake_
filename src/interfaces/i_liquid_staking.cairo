@@ -24,6 +24,13 @@ pub mod Events{
     }
 
     #[derive(Drop, starknet::Event)]
+    struct DelegatorWithdrew {
+        id: u8,
+        delegator: ContractAddress,
+        amount: u256,
+    }
+
+    #[derive(Drop, starknet::Event)]
     struct WithdrawalRequested {
         user: ContractAddress,
         request_id: u32,
@@ -111,7 +118,6 @@ trait ILiquidStaking<TContractState> {
 
 #[starknet::interface] 
 trait ILiquidStakingView<TContractState> {
-    fn get_total_assets(self: @TContractState) -> u256;
     fn get_fee_strategy(self: @TContractState) -> FeeStrategy;
     fn get_platform_fee_recipient(self: @TContractState) -> ContractAddress;
     fn get_withdrawable_amount(self: @TContractState, user: ContractAddress) -> u256;

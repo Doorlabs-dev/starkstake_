@@ -60,7 +60,7 @@ mod LiquidStakingProtocol {
         strk_address: ContractAddress,
         pool_contract: ContractAddress,
         delegators: Map<u8, ContractAddress>,
-        delegator_status: Map<u8, (bool, u64)>, // (is_available, available_time)
+        delegator_status: Map<u8, (bool, u64)>, // (available_time)
         withdrawal_requests: Map<(ContractAddress, u32), WithdrawalRequest>,
         next_withdrawal_request_id: Map<ContractAddress, u32>,
         delegator_class_hash: ClassHash,
@@ -89,6 +89,7 @@ mod LiquidStakingProtocol {
     #[derive(Drop, starknet::Event)]
     enum Event {
         Deposit: Events::Deposit,
+        DelegatorWithdrew: Events::DelegatorWithdrew,
         WithdrawalRequested: Events::WithdrawalRequested,
         WithdrawnMultiple: Events::WithdrawnMultiple,
         RewardDistributed: Events::RewardDistributed,
@@ -202,6 +203,9 @@ mod LiquidStakingProtocol {
 
             assert(total_assets_to_withdraw > 0, 'No withdrawable requests');
 
+            let strk_token = IERC20Dispatcher { contract_address: self.strk_address.read() };
+            strk_token.transfer(caller, total_assets_to_withdraw);
+
             self
                 .emit(
                     Events::WithdrawnMultiple {
@@ -214,12 +218,13 @@ mod LiquidStakingProtocol {
             self.reentrancy_guard.end();
         }
 
-        fn process_batch(ref self: ContractState){
+        fn process_batch(ref self: ContractState) {
             self.pausable.assert_not_paused();
             self.access_control.assert_only_role(ADMIN_ROLE);
             self.reentrancy_guard.start();
 
             self._process_batch();
+            self._delegator_withdraw();
 
             self.reentrancy_guard.end();
         }
@@ -294,7 +299,7 @@ mod LiquidStakingProtocol {
             while i < NUM_DELEGATORS {
                 let delegator_address = self._deploy_delegator();
                 self.delegators.write(i, delegator_address);
-                self.delegator_status.write(i, (true, 0));
+                self.delegator_status.write(i, (true, get_block_timestamp()));
                 self
                     .emit(
                         Events::DelegatorStatusChanged {
@@ -332,7 +337,7 @@ mod LiquidStakingProtocol {
         fn _process_withdrawals(
             ref self: ContractState, request_ids: Array<u32>
         ) -> (ContractAddress, u256) {
-            let caller = get_caller_address();
+            let caller = get_tx_info().account_contract_address;
             let current_time = get_block_timestamp();
             let mut total_assets_to_withdraw = 0_u256;
 
@@ -365,10 +370,6 @@ mod LiquidStakingProtocol {
         }
 
         fn _process_batch(ref self: ContractState) {
-            self.pausable.assert_not_paused();
-            self.access_control.assert_only_role(ADMIN_ROLE);
-            self.reentrancy_guard.start();
-
             let current_time = get_block_timestamp();
             //assert(current_time >= self.last_processing_time.read() + ONE_DAY, 'Too early');
 
@@ -398,8 +399,37 @@ mod LiquidStakingProtocol {
                         net_deposit_amount, net_withdrawal_amount, timestamp: current_time
                     }
                 );
+        }
 
-            self.reentrancy_guard.end();
+        fn _delegator_withdraw(ref self: ContractState) {
+            let now = get_block_timestamp();
+            // 델리게이터 상태 확인 및 출금 처리
+            let mut i: u8 = 0;
+            while i < NUM_DELEGATORS {
+                let (is_available, available_time) = self.delegator_status.read(i);
+
+                // 델리게이터가 사용 불가능하지만 사용 가능 시간이 지난
+                // 경우
+                if !is_available && now >= available_time {
+                    let delegator_address = self.delegators.read(i);
+                    let delegator = IDelegatorDispatcher { contract_address: delegator_address, };
+
+                    // 델리게이터의 출금 처리 호출
+                    let withdrawn_amount = delegator.process_withdrawal();
+                    self.emit(Events::DelegatorWithdrew{id: i, delegator: delegator_address, amount: withdrawn_amount});
+
+                    // 델리게이터 상태를 다시 사용 가능하도록 업데이트
+                    self.delegator_status.write(i, (true, now));
+                    self
+                        .emit(
+                            Events::DelegatorStatusChanged {
+                                delegator: delegator_address, status: true, available_time: 0,
+                            }
+                        );
+                }
+
+                i += 1;
+            }
         }
 
         fn _delegate_to_available_delegator(ref self: ContractState, amount: u256) {
@@ -510,8 +540,8 @@ mod LiquidStakingProtocol {
         }
 
         fn _is_delegator_available(self: @ContractState, index: u8) -> bool {
-            let (status, available_time) = self.delegator_status.read(index);
-            status || get_block_timestamp() >= available_time
+            let (status, _) = self.delegator_status.read(index);
+            status
         }
 
         fn _deploy_delegator(ref self: ContractState) -> ContractAddress {
