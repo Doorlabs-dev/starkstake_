@@ -11,7 +11,7 @@ trait IRoleBasedAccessControl<TContractState> {
 
 
 #[starknet::component]
-pub mod RoleBasedAccessControlComponent {
+mod RoleBasedAccessControlComponent {
     use super::ContractAddress;
     use starknet::get_caller_address;
     use openzeppelin::access::accesscontrol::AccessControlComponent;
@@ -76,11 +76,21 @@ pub mod RoleBasedAccessControlComponent {
     > of InternalTrait<TContractState> {
         fn initialize(ref self: ComponentState<TContractState>, admin: ContractAddress) {
             let mut access_comp = get_dep_component_mut!(ref self, Access);
-            access_comp.grant_role(ADMIN_ROLE, admin);
-            access_comp.grant_role(LIQUID_STAKING_ROLE, admin);
-            access_comp.grant_role(MINTER_ROLE, admin);
-            access_comp.grant_role(PAUSER_ROLE, admin);
-            access_comp.grant_role(UPGRADER_ROLE, admin);
+            access_comp._grant_role(ADMIN_ROLE, get_caller_address());
+
+            access_comp._grant_role(ADMIN_ROLE, admin);
+            access_comp._grant_role(LIQUID_STAKING_ROLE, admin);
+            access_comp._grant_role(MINTER_ROLE, admin);
+            access_comp._grant_role(PAUSER_ROLE, admin);
+            access_comp._grant_role(UPGRADER_ROLE, admin);
+
+            access_comp.set_role_admin(ADMIN_ROLE, ADMIN_ROLE);
+            access_comp.set_role_admin(LIQUID_STAKING_ROLE, ADMIN_ROLE);
+            access_comp.set_role_admin(MINTER_ROLE, ADMIN_ROLE);
+            access_comp.set_role_admin(PAUSER_ROLE, ADMIN_ROLE);
+            access_comp.set_role_admin(UPGRADER_ROLE, ADMIN_ROLE);
+
+            access_comp._revoke_role(ADMIN_ROLE, get_caller_address());
         }
 
         fn assert_only_role(self: @ComponentState<TContractState>, role: felt252) {
