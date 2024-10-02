@@ -1,4 +1,4 @@
-use starknet::ContractAddress;
+use starknet::{ContractAddress, ClassHash};
 // Fee Strategy enum for the Strategy pattern
 #[derive(Drop, Copy, Serde, PartialEq, starknet::Store)]
 enum FeeStrategy {
@@ -12,7 +12,7 @@ struct WithdrawalRequest {
     withdrawal_time: u64,
 }
 
-pub mod Events{
+mod Events{
     use super::ContractAddress;
 
     #[derive(Drop, starknet::Event)]
@@ -114,6 +114,9 @@ trait ILiquidStaking<TContractState> {
     fn process_net_withdrawal(ref self: TContractState, amount: u256);
     fn set_unavailability_period(ref self: TContractState, new_period: u64);
 
+    fn upgrade(ref self: TContractState, new_class_hash: ClassHash);
+    fn upgrade_delegator(ref self: TContractState, new_class_hash: ClassHash);
+    fn upgrade_lst(ref self: TContractState, new_class_hash: ClassHash);
 }
 
 #[starknet::interface] 

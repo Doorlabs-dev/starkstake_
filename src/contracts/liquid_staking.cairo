@@ -1,11 +1,10 @@
 #[starknet::contract]
-mod LiquidStakingProtocol {
+mod LiquidStaking {
     use core::num::traits::Bounded;
-    use core::option::OptionTrait;
     use core::array::ArrayTrait;
     use starknet::{
         ContractAddress, ClassHash, get_caller_address, get_block_timestamp, get_contract_address,
-        get_tx_info
+        SyscallResultTrait, syscalls::deploy_syscall, get_tx_info
     };
     use starknet::storage::Map;
 
@@ -26,7 +25,7 @@ mod LiquidStakingProtocol {
         i_delegator::IDelegatorDispatcherTrait,
     };
 
-    use stake_stark::utils::constants::{ADMIN_ROLE, ONE_DAY, LIQUID_STAKING_ROLE};
+    use stake_stark::utils::constants::{ADMIN_ROLE, ONE_DAY};
 
     // Component declarations
     component!(path: AccessControlComponent, storage: oz_access_control, event: AccessControlEvent);
@@ -139,9 +138,9 @@ mod LiquidStakingProtocol {
         self.min_deposit_amount.write(10_000_000_000_000_000_000); // min deposit is 10 STRK
 
         self.access_control.initialize(admin);
-        self.access_control.grant_role(LIQUID_STAKING_ROLE, get_contract_address());
 
         self._initialize_delegators();
+
     }
 
     #[abi(embed_v0)]
@@ -290,6 +289,30 @@ mod LiquidStakingProtocol {
             self.withdrawal_window_period.write(new_period);
             self.emit(Events::UnavailabilityPeriodChanged { old_period, new_period });
         }
+
+        //TODO: add time lock
+        fn upgrade(ref self: ContractState, new_class_hash: ClassHash) {
+            self.access_control.assert_only_role(ADMIN_ROLE);
+            self.upgradeable.upgrade(new_class_hash);
+        }
+
+        //TODO: add time lock
+        fn upgrade_delegator(ref self: ContractState, new_class_hash: ClassHash) {
+            self.access_control.assert_only_role(ADMIN_ROLE);
+            self.delegator_class_hash.write(new_class_hash);
+            let mut i: u8 = 0;
+            while i < NUM_DELEGATORS {
+                IDelegatorDispatcher { contract_address: self.delegators.read(i) }
+                    .upgrade(new_class_hash);
+                i += 1;
+            };
+        }
+
+        //TODO: add time lock
+        fn upgrade_lst(ref self: ContractState, new_class_hash: ClassHash) {
+            self.access_control.assert_only_role(ADMIN_ROLE);
+            ILSTokenDispatcher { contract_address: self.ls_token.read() }.upgrade(new_class_hash);
+        }
     }
 
     #[generate_trait]
@@ -303,7 +326,9 @@ mod LiquidStakingProtocol {
                 self
                     .emit(
                         Events::DelegatorStatusChanged {
-                            delegator: delegator_address, status: true, available_time: 0
+                            delegator: delegator_address,
+                            status: true,
+                            available_time: get_block_timestamp()
                         }
                     );
                 i += 1;
@@ -416,7 +441,12 @@ mod LiquidStakingProtocol {
 
                     // 델리게이터의 출금 처리 호출
                     let withdrawn_amount = delegator.process_withdrawal();
-                    self.emit(Events::DelegatorWithdrew{id: i, delegator: delegator_address, amount: withdrawn_amount});
+                    self
+                        .emit(
+                            Events::DelegatorWithdrew {
+                                id: i, delegator: delegator_address, amount: withdrawn_amount
+                            }
+                        );
 
                     // 델리게이터 상태를 다시 사용 가능하도록 업데이트
                     self.delegator_status.write(i, (true, now));
@@ -544,17 +574,16 @@ mod LiquidStakingProtocol {
             status
         }
 
+        // TODO: fix deploy
         fn _deploy_delegator(ref self: ContractState) -> ContractAddress {
-            let mut calldata = ArrayTrait::<felt252>::new();
-            calldata.append(get_contract_address().into());
-            calldata.append(self.pool_contract.read().into());
-            calldata.append(self.strk_address.read().into());
-            calldata.append(get_contract_address().into());
+            let mut calldata: Array::<felt252> = array![];
+            (get_contract_address(), self.pool_contract.read(), self.strk_address.read(), )
+                .serialize(ref calldata);
 
             let (deployed_address, _) = starknet::deploy_syscall(
                 self.delegator_class_hash.read(), 0, calldata.span(), false
             )
-                .unwrap();
+                .unwrap_syscall();
 
             self.emit(Events::DelegatorAdded { delegator: deployed_address });
 
@@ -751,14 +780,6 @@ mod LiquidStakingProtocol {
 
         fn get_last_processing_time(self: @ContractState) -> u64 {
             self.last_processing_time.read()
-        }
-    }
-
-    #[generate_trait]
-    impl UpgradeableFunctions of UpgradeableFunctionsTrait {
-        fn upgrade(ref self: ContractState, new_class_hash: ClassHash) {
-            self.access_control.assert_only_role(ADMIN_ROLE);
-            self.upgradeable.upgrade(new_class_hash);
         }
     }
 }
