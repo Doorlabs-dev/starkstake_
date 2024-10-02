@@ -205,6 +205,13 @@ mod Delegator {
             rewards
         }
 
+        /// Upgrades the contract to a new implementation
+        /// @param new_class_hash: The class hash of the new implementation
+        fn upgrade(ref self: ContractState, new_class_hash: ClassHash) {
+            self.access_control.assert_only_role(ADMIN_ROLE);
+            self.upgradeable.upgrade(new_class_hash);
+        }
+
         /// Gets the total stake of this delegator
         /// @return u256: Total stake amount
         fn get_total_stake(self: @ContractState) -> u256 {
@@ -218,13 +225,4 @@ mod Delegator {
         }
     }
 
-    #[generate_trait]
-    impl UpgradeableFunctions of UpgradeableFunctionsTrait {
-        /// Upgrades the contract to a new implementation
-        /// @param new_class_hash: The class hash of the new implementation
-        fn upgrade(ref self: ContractState, new_class_hash: ClassHash) {
-            self.access_control.assert_only_role(ADMIN_ROLE);
-            self.upgradeable.upgrade(new_class_hash);
-        }
-    }
 }

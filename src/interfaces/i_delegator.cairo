@@ -1,4 +1,4 @@
-use starknet::ContractAddress;
+use starknet::{ContractAddress, ClassHash};
 
 mod Events{
     #[derive(Drop, starknet::Event)]
@@ -28,6 +28,7 @@ trait IDelegator<TContractState> {
     fn request_withdrawal(ref self: TContractState, amount: u256);
     fn process_withdrawal(ref self: TContractState) -> u256;
     fn collect_rewards(ref self: TContractState) -> u256;
+    fn upgrade(ref self: TContractState, new_class_hash: ClassHash);
     fn get_total_stake(self: @TContractState) -> u256;
     fn get_last_reward_claim_time(self: @TContractState) -> u64;
 }
