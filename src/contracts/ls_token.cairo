@@ -323,10 +323,7 @@ mod LSToken {
                 (self.erc20.total_supply() * 1_000_000_000_000_000_000) / self.total_assets()
             }
         }
-    }
 
-    #[generate_trait]
-    impl AdminFunctions of AdminFunctionsTrait {
         fn pause(ref self: ContractState) {
             self.access_control.assert_only_role(PAUSER_ROLE);
             self.pausable.pause();

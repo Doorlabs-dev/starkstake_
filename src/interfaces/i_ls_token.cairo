@@ -64,6 +64,10 @@ trait ILSToken<TContractState> {
     fn burn(ref self: TContractState, share: u256, caller: ContractAddress);
     fn shares_per_asset(self: @TContractState) -> u256;
 
+    fn pause(ref self: TContractState);
+    fn unpause(ref self: TContractState);
+    fn upgrade(ref self: TContractState, new_class_hash: starknet::ClassHash);
+
     // ERC20 functions
     // fn total_supply(self: @TContractState) -> u256;
     // fn balance_of(self: @TContractState, account: ContractAddress) -> u256;
