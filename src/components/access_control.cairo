@@ -20,7 +20,7 @@ mod RoleBasedAccessControlComponent {
     use openzeppelin_introspection::src5::SRC5Component;
 
     use stake_stark::utils::constants::{
-        ADMIN_ROLE, LIQUID_STAKING_ROLE, MINTER_ROLE, PAUSER_ROLE, UPGRADER_ROLE, VALIDATOR_ROLE
+        ADMIN_ROLE, LIQUID_STAKING_ROLE, MINTER_ROLE, PAUSER_ROLE, UPGRADER_ROLE, VALIDATOR_ROLE, OPERATOR_ROLE
     };
 
     #[storage]
@@ -76,6 +76,10 @@ mod RoleBasedAccessControlComponent {
     > of InternalTrait<TContractState> {
         fn initialize(ref self: ComponentState<TContractState>, admin: ContractAddress) {
             let mut access_comp = get_dep_component_mut!(ref self, Access);
+            access_comp.initializer();
+            let un_initialized = access_comp.get_role_admin(role: ADMIN_ROLE).is_zero();
+            assert(un_initialized, 'Already initialized');
+
             access_comp._grant_role(ADMIN_ROLE, admin);
             access_comp._grant_role(LIQUID_STAKING_ROLE, admin);
             access_comp._grant_role(MINTER_ROLE, admin);
@@ -118,6 +122,10 @@ mod RoleBasedAccessControlComponent {
 
         fn assert_only_upgrader(self: @ComponentState<TContractState>) {
             self.assert_only_role(UPGRADER_ROLE);
+        }
+
+        fn assert_only_operator(self: @ComponentState<TContractState>) {
+            self.assert_only_role(OPERATOR_ROLE);
         }
     }
 }

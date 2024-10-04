@@ -109,7 +109,6 @@ mod LSToken {
         symbol: ByteArray,
         liquid_staking_protocol: ContractAddress,
         asset: ContractAddress,
-        admin: ContractAddress,
     ) {
         self.erc20.initializer(name, symbol);
 
@@ -119,6 +118,7 @@ mod LSToken {
         self.liquid_staking_protocol.write(liquid_staking_protocol);
         
         // Grant roles
+        self.access_control.grant_role(UPGRADER_ROLE, liquid_staking_protocol);
         self.access_control.grant_role(MINTER_ROLE, liquid_staking_protocol);
         self.access_control.grant_role(BURNER_ROLE, liquid_staking_protocol);
     }
@@ -335,7 +335,7 @@ mod LSToken {
         }
 
         fn upgrade(ref self: ContractState, new_class_hash: starknet::ClassHash) {
-            self.access_control.assert_only_role(ADMIN_ROLE);
+            self.access_control.assert_only_role(UPGRADER_ROLE);
             self.upgradeable.upgrade(new_class_hash);
         }
     }
