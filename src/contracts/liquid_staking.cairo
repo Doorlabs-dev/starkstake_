@@ -338,7 +338,9 @@ mod LiquidStaking {
             let current_time = get_block_timestamp();
             let mut total_assets_to_withdraw = 0_u256;
 
-            for request_id in request_ids {
+            let requests = self.get_available_withdrawal_requests(caller);
+
+            for (request_id, _) in requests {
                 let request = self.withdrawal_requests.read((caller, request_id));
                 assert(request.assets > 0, 'Invalid request ID');
                 assert(current_time >= request.withdrawal_time, 'Request not ready');
@@ -738,7 +740,7 @@ mod LiquidStaking {
         ) -> Array<(u32, WithdrawalRequest)> {
             let mut available_requests = ArrayTrait::new();
             let current_time = get_block_timestamp();
-            let mut request_id = 0;
+            let mut request_id = self.next_withdrawal_request_id.read(user) - 1;
 
             loop {
                 let request = self.withdrawal_requests.read((user, request_id));
@@ -748,7 +750,7 @@ mod LiquidStaking {
                 if current_time >= request.withdrawal_time {
                     available_requests.append((request_id, request));
                 }
-                request_id += 1;
+                request_id -= 1;
                 if request_id >= Bounded::<u32>::MAX {
                     break;
                 }
