@@ -104,14 +104,11 @@ trait ILiquidStaking<TContractState> {
     fn withdraw(ref self: TContractState, request_ids: Array<u32>);
     fn process_batch(ref self: TContractState);
 
-    fn collect_and_distribute_rewards(ref self: TContractState);
     fn set_fee_strategy(ref self: TContractState, new_strategy: FeeStrategy);
     fn set_platform_fee_recipient(ref self: TContractState, recipient: ContractAddress);
     fn pause(ref self: TContractState);
     fn unpause(ref self: TContractState);
-
-    fn process_net_deposit(ref self: TContractState, amount: u256);
-    fn process_net_withdrawal(ref self: TContractState, amount: u256);
+    
     fn set_unavailability_period(ref self: TContractState, new_period: u64);
 
     fn upgrade(ref self: TContractState, new_class_hash: ClassHash);

@@ -25,7 +25,7 @@ mod LiquidStaking {
         i_delegator::IDelegatorDispatcherTrait,
     };
 
-    use stake_stark::utils::constants::{ADMIN_ROLE, ONE_DAY};
+    use stake_stark::utils::constants::{ADMIN_ROLE, ONE_DAY, OPERATOR_ROLE, PAUSER_ROLE, UPGRADER_ROLE};
 
     // Component declarations
     component!(path: AccessControlComponent, storage: oz_access_control, event: AccessControlEvent);
@@ -116,31 +116,29 @@ mod LiquidStaking {
     #[constructor]
     fn constructor(
         ref self: ContractState,
-        ls_token: ContractAddress,
         strk_address: ContractAddress,
         pool_contract: ContractAddress,
-        admin: ContractAddress,
         delegator_class_hash: ClassHash,
+        ls_token_class_hash: ClassHash,
         initial_platform_fee: u16,
         platform_fee_recipient: ContractAddress,
         initial_withdrawal_window_period: u64,
+        admin: ContractAddress,
     ) {
         self._validate_fee_strategy(FeeStrategy::Flat(initial_platform_fee));
         assert(!platform_fee_recipient.is_zero(), 'Invalid fee recipient');
 
-        self.ls_token.write(ls_token);
         self.strk_address.write(strk_address);
         self.pool_contract.write(pool_contract);
         self.delegator_class_hash.write(delegator_class_hash);
+        self.ls_token.write(self._deploy_lst(ls_token_class_hash));
         self.fee_strategy.write(FeeStrategy::Flat(initial_platform_fee));
         self.platform_fee_recipient.write(platform_fee_recipient);
         self.withdrawal_window_period.write(initial_withdrawal_window_period);
         self.min_deposit_amount.write(10_000_000_000_000_000_000); // min deposit is 10 STRK
 
         self.access_control.initialize(admin);
-
         self._initialize_delegators();
-
     }
 
     #[abi(embed_v0)]
@@ -219,19 +217,11 @@ mod LiquidStaking {
 
         fn process_batch(ref self: ContractState) {
             self.pausable.assert_not_paused();
-            self.access_control.assert_only_role(ADMIN_ROLE);
+            self.access_control.assert_only_role(OPERATOR_ROLE);
             self.reentrancy_guard.start();
 
             self._process_batch();
             self._delegator_withdraw();
-
-            self.reentrancy_guard.end();
-        }
-
-        fn collect_and_distribute_rewards(ref self: ContractState) {
-            self.pausable.assert_not_paused();
-            self.access_control.assert_only_role(ADMIN_ROLE);
-            self.reentrancy_guard.start();
 
             let total_rewards = self._collect_rewards_from_delegators();
 
@@ -256,31 +246,13 @@ mod LiquidStaking {
         }
 
         fn pause(ref self: ContractState) {
-            self.access_control.assert_only_role(ADMIN_ROLE);
+            self.access_control.assert_only_role(PAUSER_ROLE);
             self.pausable.pause();
         }
 
         fn unpause(ref self: ContractState) {
-            self.access_control.assert_only_role(ADMIN_ROLE);
+            self.access_control.assert_only_role(PAUSER_ROLE);
             self.pausable.unpause();
-        }
-
-        fn process_net_deposit(ref self: ContractState, amount: u256) {
-            self.access_control.assert_only_role(ADMIN_ROLE);
-            self.reentrancy_guard.start();
-
-            self._delegate_to_available_delegator(amount);
-
-            self.reentrancy_guard.end();
-        }
-
-        fn process_net_withdrawal(ref self: ContractState, amount: u256) {
-            self.access_control.assert_only_role(ADMIN_ROLE);
-            self.reentrancy_guard.start();
-
-            self._request_withdrawal_from_available_delegator(amount);
-
-            self.reentrancy_guard.end();
         }
 
         fn set_unavailability_period(ref self: ContractState, new_period: u64) {
@@ -292,13 +264,13 @@ mod LiquidStaking {
 
         //TODO: add time lock
         fn upgrade(ref self: ContractState, new_class_hash: ClassHash) {
-            self.access_control.assert_only_role(ADMIN_ROLE);
+            self.access_control.assert_only_role(UPGRADER_ROLE);
             self.upgradeable.upgrade(new_class_hash);
         }
 
         //TODO: add time lock
         fn upgrade_delegator(ref self: ContractState, new_class_hash: ClassHash) {
-            self.access_control.assert_only_role(ADMIN_ROLE);
+            self.access_control.assert_only_role(UPGRADER_ROLE);
             self.delegator_class_hash.write(new_class_hash);
             let mut i: u8 = 0;
             while i < NUM_DELEGATORS {
@@ -310,7 +282,7 @@ mod LiquidStaking {
 
         //TODO: add time lock
         fn upgrade_lst(ref self: ContractState, new_class_hash: ClassHash) {
-            self.access_control.assert_only_role(ADMIN_ROLE);
+            self.access_control.assert_only_role(UPGRADER_ROLE);
             ILSTokenDispatcher { contract_address: self.ls_token.read() }.upgrade(new_class_hash);
         }
     }
@@ -320,7 +292,7 @@ mod LiquidStaking {
         fn _initialize_delegators(ref self: ContractState) {
             let mut i: u8 = 0;
             while i < NUM_DELEGATORS {
-                let delegator_address = self._deploy_delegator();
+                let delegator_address = self._deploy_delegator(i);
                 self.delegators.write(i, delegator_address);
                 self.delegator_status.write(i, (true, get_block_timestamp()));
                 self
@@ -408,9 +380,9 @@ mod LiquidStaking {
             };
 
             if net_deposit_amount > 0 {
-                self.process_net_deposit(net_deposit_amount);
+                self._delegate_to_available_delegator(net_deposit_amount);
             } else if net_withdrawal_amount > 0 {
-                self.process_net_withdrawal(net_withdrawal_amount);
+                self._request_withdrawal_from_available_delegator(net_withdrawal_amount);
             }
 
             // Reset pending amounts
@@ -574,14 +546,33 @@ mod LiquidStaking {
             status
         }
 
-        // TODO: fix deploy
-        fn _deploy_delegator(ref self: ContractState) -> ContractAddress {
+        fn _deploy_delegator(ref self: ContractState, i: u8) -> ContractAddress {
             let mut calldata: Array::<felt252> = array![];
-            (get_contract_address(), self.pool_contract.read(), self.strk_address.read(), )
-                .serialize(ref calldata);
+            get_contract_address().serialize(ref calldata);
+            self.pool_contract.read().serialize(ref calldata);
+            self.strk_address.read().serialize(ref calldata);
 
             let (deployed_address, _) = starknet::deploy_syscall(
-                self.delegator_class_hash.read(), 0, calldata.span(), false
+                self.delegator_class_hash.read(), i.into(), calldata.span(), false
+            )
+                .unwrap_syscall();
+
+            self.emit(Events::DelegatorAdded { delegator: deployed_address });
+
+            deployed_address
+        }
+
+        fn _deploy_lst(ref self: ContractState, lst_class_hash: ClassHash) -> ContractAddress {
+            let mut calldata: Array::<felt252> = array![];
+            let name : ByteArray = "staked STRK";
+            let symbol: ByteArray = "stSTRK";
+            name.serialize(ref calldata);
+            symbol.serialize(ref calldata);
+            get_contract_address().serialize(ref calldata);
+            self.strk_address.read().serialize(ref calldata);
+
+            let (deployed_address, _) = starknet::deploy_syscall(
+                lst_class_hash, 0, calldata.span(), false
             )
                 .unwrap_syscall();
 

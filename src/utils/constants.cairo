@@ -15,6 +15,9 @@ const BURNER_ROLE: felt252 = 0x300b0bb5f166fb58587f4b1c6caed43a923bc0edcab7027c1
 const PAUSER_ROLE: felt252 = 0x1d7a28e3265b37a6474929f336521b332c1681b933f6cb9f3376673440d862a;
 //hex(int.from_bytes(Web3.keccak(text="UPGRADER_ROLE"), "big") & mask_250)
 const UPGRADER_ROLE: felt252 = 0x9ab7a9244df0848122154315af71fe140f3db0fe014031783b0946b8c9d2e3;
+//hex(int.from_bytes(Web3.keccak(text="OPERATOR_ROLE"), "big") & mask_250)
+const OPERATOR_ROLE: felt252 = 0x23c157c0618fee210e9000399594099ceb3b2ce43c8f9e316ed8b04190307ad;
+
 
 
 const ONE_DAY: u64 = 86400; // 1 day in seconds
