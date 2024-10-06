@@ -16,9 +16,7 @@ mod Delegator {
 
     use stake_stark::components::access_control::RoleBasedAccessControlComponent;
     use stake_stark::interfaces::{
-        i_delegator::IDelegator, 
-        i_delegator::Events,
-        i_starknet_staking::IPoolDispatcher,
+        i_delegator::IDelegator, i_delegator::Events, i_starknet_staking::IPoolDispatcher,
         i_starknet_staking::IPoolDispatcherTrait
     };
 
@@ -91,9 +89,12 @@ mod Delegator {
 
 
     /// Initializes the Delegator contract
-    /// @param liquid_staking_protocol: Address of the liquid staking protocol
-    /// @param pool_contract: Address of the Starknet staking pool contract
-    /// @param strk_token: Address of the STRK token
+    ///
+    /// # Arguments
+    ///
+    /// * `liquid_staking_protocol` - Address of the liquid staking protocol
+    /// * `pool_contract` - Address of the Starknet staking pool contract
+    /// * `strk_token` - Address of the STRK token
     #[constructor]
     fn constructor(
         ref self: ContractState,
@@ -114,7 +115,10 @@ mod Delegator {
     #[abi(embed_v0)]
     impl Delegator of IDelegator<ContractState> {
         /// Delegates tokens to the Starknet staking pool
-        /// @param amount: Amount of tokens to delegate
+        ///
+        /// # Arguments
+        ///
+        /// * `amount` - Amount of tokens to delegate
         fn delegate(ref self: ContractState, amount: u256) {
             self.pausable.assert_not_paused();
             self.reentrancy_guard.start();
@@ -126,10 +130,11 @@ mod Delegator {
 
             let pool = IPoolDispatcher { contract_address: self.pool_contract.read() };
             let amount_u128: u128 = amount.try_into().unwrap();
-            
+
             if !self.is_in_pool.read() {
                 // First time entering the pool
-                let success = pool.enter_delegation_pool(self.liquid_staking_protocol.read(), amount_u128);
+                let success = pool
+                    .enter_delegation_pool(self.liquid_staking_protocol.read(), amount_u128);
                 assert(success, 'Failed to enter delegation pool');
                 self.is_in_pool.write(true);
             } else {
@@ -145,8 +150,10 @@ mod Delegator {
         }
 
         /// Requests a withdrawal from the Starknet staking pool
-        /// @param amount: Amount of tokens to withdraw
-        /// @return u64: Timestamp when withdrawal will be possible
+        ///
+        /// # Arguments
+        ///
+        /// * `amount` - Amount of tokens to withdraw
         fn request_withdrawal(ref self: ContractState, amount: u256) {
             self.pausable.assert_not_paused();
             self.reentrancy_guard.start();
@@ -163,7 +170,10 @@ mod Delegator {
         }
 
         /// Processes a withdrawal from the Starknet staking pool
-        /// @return u256: Amount of tokens withdrawn
+        ///
+        /// # Returns
+        ///
+        /// Amount of tokens withdrawn
         fn process_withdrawal(ref self: ContractState) -> u256 {
             self.pausable.assert_not_paused();
             self.reentrancy_guard.start();
@@ -185,9 +195,14 @@ mod Delegator {
         }
 
         /// Collects rewards from the Starknet staking pool
-        /// @return u256: Amount of rewards collected
+        ///
+        /// # Returns
+        ///
+        /// Amount of rewards collected
         fn collect_rewards(ref self: ContractState) -> u256 {
-            if !self.is_in_pool.read(){ return 0; };
+            if !self.is_in_pool.read() {
+                return 0;
+            };
             self.pausable.assert_not_paused();
             self.reentrancy_guard.start();
             self.access_control.assert_only_role(LIQUID_STAKING_ROLE);
@@ -207,23 +222,31 @@ mod Delegator {
         }
 
         /// Upgrades the contract to a new implementation
-        /// @param new_class_hash: The class hash of the new implementation
+        ///
+        /// # Arguments
+        ///
+        /// * `new_class_hash` - The class hash of the new implementation
         fn upgrade(ref self: ContractState, new_class_hash: ClassHash) {
             self.access_control.assert_only_role(ADMIN_ROLE);
             self.upgradeable.upgrade(new_class_hash);
         }
 
         /// Gets the total stake of this delegator
-        /// @return u256: Total stake amount
+        ///
+        /// # Returns
+        ///
+        /// Total stake amount
         fn get_total_stake(self: @ContractState) -> u256 {
             self.total_stake.read()
         }
 
         /// Gets the last time rewards were claimed
-        /// @return u64: Timestamp of last reward claim
+        ///
+        /// # Returns
+        ///
+        /// Timestamp of last reward claim
         fn get_last_reward_claim_time(self: @ContractState) -> u64 {
             self.last_reward_claim_time.read()
         }
     }
-
 }

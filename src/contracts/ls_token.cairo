@@ -12,12 +12,12 @@ mod LSToken {
 
     use stake_stark::components::access_control::RoleBasedAccessControlComponent;
 
-    use stake_stark::utils::constants::{ADMIN_ROLE, MINTER_ROLE, BURNER_ROLE, PAUSER_ROLE, UPGRADER_ROLE};
+    use stake_stark::utils::constants::{
+        ADMIN_ROLE, MINTER_ROLE, BURNER_ROLE, PAUSER_ROLE, UPGRADER_ROLE
+    };
 
     use stake_stark::interfaces::{
-        i_ls_token::ILSToken,
-        i_ls_token::Events,
-        i_liquid_staking::ILiquidStakingDispatcher,
+        i_ls_token::ILSToken, i_ls_token::Events, i_liquid_staking::ILiquidStakingDispatcher,
         i_liquid_staking::ILiquidStakingDispatcherTrait,
         i_liquid_staking::ILiquidStakingViewDispatcher,
         i_liquid_staking::ILiquidStakingViewDispatcherTrait
@@ -102,6 +102,14 @@ mod LSToken {
         RBACEvent: RoleBasedAccessControlComponent::Event,
     }
 
+    /// Initializes the LSToken contract
+    ///
+    /// # Arguments
+    ///
+    /// * `name` - Name of the token
+    /// * `symbol` - Symbol of the token
+    /// * `liquid_staking_protocol` - Address of the liquid staking protocol
+    /// * `asset` - Address of the underlying asset
     #[constructor]
     fn constructor(
         ref self: ContractState,
@@ -116,7 +124,7 @@ mod LSToken {
         self.total_assets.write(0);
 
         self.liquid_staking_protocol.write(liquid_staking_protocol);
-        
+
         // Grant roles
         self.access_control.grant_role(UPGRADER_ROLE, liquid_staking_protocol);
         self.access_control.grant_role(MINTER_ROLE, liquid_staking_protocol);
@@ -125,14 +133,25 @@ mod LSToken {
 
     #[abi(embed_v0)]
     impl LSTokenImpl of ILSToken<ContractState> {
+        /// Returns the address of the underlying asset
         fn asset(self: @ContractState) -> ContractAddress {
             self.asset.read()
         }
 
+        /// Returns the total amount of the underlying asset
         fn total_assets(self: @ContractState) -> u256 {
             self.total_assets.read()
         }
 
+        /// Converts a given amount of assets to shares
+        ///
+        /// # Arguments
+        ///
+        /// * `assets` - Amount of assets to convert
+        ///
+        /// # Returns
+        ///
+        /// The equivalent amount of shares
         fn convert_to_shares(self: @ContractState, assets: u256) -> u256 {
             if self.total_assets() == 0 {
                 assets * INITIAL_SHARES_PER_ASSET
@@ -141,6 +160,15 @@ mod LSToken {
             }
         }
 
+        /// Converts a given amount of shares to assets
+        ///
+        /// # Arguments
+        ///
+        /// * `shares` - Amount of shares to convert
+        ///
+        /// # Returns
+        ///
+        /// The equivalent amount of assets
         fn convert_to_assets(self: @ContractState, shares: u256) -> u256 {
             if self.erc20.total_supply() == 0 {
                 shares / INITIAL_SHARES_PER_ASSET
@@ -149,6 +177,15 @@ mod LSToken {
             }
         }
 
+        /// Returns the maximum amount of the underlying asset that can be deposited
+        ///
+        /// # Arguments
+        ///
+        /// * `receiver` - Address that will receive the minted tokens
+        ///
+        /// # Returns
+        ///
+        /// The maximum amount of assets that can be deposited
         fn max_deposit(self: @ContractState, receiver: ContractAddress) -> u256 {
             if self.pausable.is_paused() {
                 0
@@ -157,10 +194,29 @@ mod LSToken {
             }
         }
 
+        /// Simulates the effects of depositing assets at the current status
+        ///
+        /// # Arguments
+        ///
+        /// * `assets` - Amount of assets to deposit
+        ///
+        /// # Returns
+        ///
+        /// The amount of shares that would be minted
         fn preview_deposit(self: @ContractState, assets: u256) -> u256 {
             self.convert_to_shares(assets)
         }
 
+        /// Deposits assets and mints shares to receiver
+        ///
+        /// # Arguments
+        ///
+        /// * `assets` - Amount of assets to deposit
+        /// * `receiver` - Address that will receive the minted shares
+        ///
+        /// # Returns
+        ///
+        /// The amount of shares minted
         fn deposit(ref self: ContractState, assets: u256, receiver: ContractAddress) -> u256 {
             self.pausable.assert_not_paused();
             self.reentrancy_guard.start();
@@ -187,6 +243,15 @@ mod LSToken {
             shares
         }
 
+        /// Returns the maximum amount of shares that can be minted
+        ///
+        /// # Arguments
+        ///
+        /// * `receiver` - Address that will receive the minted tokens
+        ///
+        /// # Returns
+        ///
+        /// The maximum amount of shares that can be minted
         fn max_mint(self: @ContractState, receiver: ContractAddress) -> u256 {
             if self.pausable.is_paused() {
                 0
@@ -195,6 +260,15 @@ mod LSToken {
             }
         }
 
+        /// Simulates the effects of minting shares at the current status
+        ///
+        /// # Arguments
+        ///
+        /// * `assets` - Amount of assets to mint shares for
+        ///
+        /// # Returns
+        ///
+        /// The amount of shares that would be minted
         fn preview_mint(self: @ContractState, assets: u256) -> u256 {
             if self.erc20.total_supply() == 0 {
                 assets * INITIAL_SHARES_PER_ASSET
@@ -203,6 +277,16 @@ mod LSToken {
             }
         }
 
+        /// Mints exact amount of shares to receiver
+        ///
+        /// # Arguments
+        ///
+        /// * `assets` - Amount of assets to mint shares for
+        /// * `receiver` - Address that will receive the minted shares
+        ///
+        /// # Returns
+        ///
+        /// The amount of shares minted
         fn mint(ref self: ContractState, assets: u256, receiver: ContractAddress) -> u256 {
             self.access_control.assert_only_role(MINTER_ROLE);
             self.pausable.assert_not_paused();
@@ -217,12 +301,26 @@ mod LSToken {
             // Update total assets
             self.total_assets.write(self.total_assets.read() + assets);
 
-            self.emit(Events::Deposit { sender: get_caller_address(), owner: receiver, assets, shares });
+            self
+                .emit(
+                    Events::Deposit {
+                        sender: get_caller_address(), owner: receiver, assets, shares
+                    }
+                );
 
             self.reentrancy_guard.end();
             shares
         }
 
+        /// Returns the maximum amount of the underlying asset that can be withdrawn
+        ///
+        /// # Arguments
+        ///
+        /// * `owner` - Address of the owner
+        ///
+        /// # Returns
+        ///
+        /// The maximum amount of assets that can be withdrawn
         fn max_withdraw(self: @ContractState, owner: ContractAddress) -> u256 {
             if self.pausable.is_paused() {
                 0
@@ -231,6 +329,15 @@ mod LSToken {
             }
         }
 
+        /// Simulates the effects of withdrawing assets at the current status
+        ///
+        /// # Arguments
+        ///
+        /// * `assets` - Amount of assets to withdraw
+        ///
+        /// # Returns
+        ///
+        /// The amount of shares that would be burned
         fn preview_withdraw(self: @ContractState, assets: u256) -> u256 {
             if self.total_assets() == 0 {
                 0
@@ -239,6 +346,17 @@ mod LSToken {
             }
         }
 
+        /// Burns shares from owner and sends exactly assets token to receiver
+        ///
+        /// # Arguments
+        ///
+        /// * `assets` - Amount of assets to withdraw
+        /// * `receiver` - Address that will receive the assets
+        /// * `owner` - Address of the owner of the shares
+        ///
+        /// # Returns
+        ///
+        /// The amount of shares burned
         fn withdraw(
             ref self: ContractState, assets: u256, receiver: ContractAddress, owner: ContractAddress
         ) -> u256 {
@@ -253,9 +371,11 @@ mod LSToken {
                 assert(allowed >= shares, 'EXCEED_ALLOWANCE');
                 self.erc20._approve(owner, caller, allowed - shares);
             }
-            
+
             // Call request_withdrawal function of LiquidStakingProtocol
-            let liquid_staking = ILiquidStakingDispatcher { contract_address: self.liquid_staking_protocol.read() };
+            let liquid_staking = ILiquidStakingDispatcher {
+                contract_address: self.liquid_staking_protocol.read()
+            };
             liquid_staking.request_withdrawal(shares);
 
             self.emit(Events::Withdraw { sender: caller, receiver, owner, assets, shares });
@@ -264,6 +384,15 @@ mod LSToken {
             shares
         }
 
+        /// Returns the maximum amount of shares that can be redeemed
+        ///
+        /// # Arguments
+        ///
+        /// * `owner` - Address of the owner
+        ///
+        /// # Returns
+        ///
+        /// The maximum amount of shares that can be redeemed
         fn max_redeem(self: @ContractState, owner: ContractAddress) -> u256 {
             if self.pausable.is_paused() {
                 0
@@ -272,10 +401,31 @@ mod LSToken {
             }
         }
 
+        /// Simulates the effects of redeeming shares at the current status
+        ///
+        /// # Arguments
+        ///
+        /// * `shares` - Amount of shares to redeem
+        ///
+        /// # Returns
+        ///
+        /// The amount of assets that would be withdrawn
         fn preview_redeem(self: @ContractState, shares: u256) -> u256 {
             self.convert_to_assets(shares)
         }
 
+
+        /// Burns exact amount of shares from owner and sends assets to receiver
+        ///
+        /// # Arguments
+        ///
+        /// * `shares` - Amount of shares to redeem
+        /// * `receiver` - Address that will receive the assets
+        /// * `owner` - Address of the owner of the shares
+        ///
+        /// # Returns
+        ///
+        /// The amount of assets withdrawn
         fn redeem(
             ref self: ContractState, shares: u256, receiver: ContractAddress, owner: ContractAddress
         ) -> u256 {
@@ -290,9 +440,11 @@ mod LSToken {
             }
 
             let assets = self.preview_redeem(shares);
-            
+
             // Call request_withdrawal function of LiquidStakingProtocol
-            let liquid_staking = ILiquidStakingDispatcher { contract_address: self.liquid_staking_protocol.read() };
+            let liquid_staking = ILiquidStakingDispatcher {
+                contract_address: self.liquid_staking_protocol.read()
+            };
             liquid_staking.request_withdrawal(shares);
 
             self.emit(Events::Redeem { caller, receiver, owner, assets, shares });
@@ -301,6 +453,11 @@ mod LSToken {
             assets
         }
 
+        /// Updates the total amount of assets
+        ///
+        /// # Arguments
+        ///
+        /// * `new_total_assets` - New total amount of assets
         fn rebase(ref self: ContractState, new_total_assets: u256) {
             self.access_control.assert_only_role(MINTER_ROLE);
             let old_total_assets = self.total_assets.read();
@@ -309,6 +466,12 @@ mod LSToken {
             self.emit(Events::Rebased { old_total_assets, new_total_assets });
         }
 
+        /// Burns shares from a specified address
+        ///
+        /// # Arguments
+        ///
+        /// * `share` - Amount of shares to burn
+        /// * `caller` - Address from which to burn shares
         fn burn(ref self: ContractState, share: u256, caller: ContractAddress) {
             self.access_control.assert_only_role(MINTER_ROLE);
             self.erc20.burn(caller, share);
@@ -316,6 +479,11 @@ mod LSToken {
             self.total_assets.write(self.total_assets.read() - assets_to_burn);
         }
 
+        /// Returns the current ratio of shares to assets
+        ///
+        /// # Returns
+        ///
+        /// The number of shares per asset, scaled by 1e18
         fn shares_per_asset(self: @ContractState) -> u256 {
             if self.total_assets() == 0 {
                 INITIAL_SHARES_PER_ASSET
@@ -324,16 +492,23 @@ mod LSToken {
             }
         }
 
+        /// Pauses the contract
         fn pause(ref self: ContractState) {
             self.access_control.assert_only_role(PAUSER_ROLE);
             self.pausable.pause();
         }
 
+        /// Unpauses the contract
         fn unpause(ref self: ContractState) {
             self.access_control.assert_only_role(PAUSER_ROLE);
             self.pausable.unpause();
         }
 
+        /// Upgrades the contract to a new implementation
+        ///
+        /// # Arguments
+        ///
+        /// * `new_class_hash` - The class hash of the new implementation
         fn upgrade(ref self: ContractState, new_class_hash: starknet::ClassHash) {
             self.access_control.assert_only_role(UPGRADER_ROLE);
             self.upgradeable.upgrade(new_class_hash);

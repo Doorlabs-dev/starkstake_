@@ -58,7 +58,7 @@ mod LiquidStaking {
     #[storage]
     struct Storage {
         ls_token: ContractAddress,
-        strk_address: ContractAddress,
+        strk_token: ContractAddress,
         pool_contract: ContractAddress,
         delegators: Map<u8, ContractAddress>,
         delegator_status: Map<u8, (bool, u64)>, // (available_time)
@@ -118,7 +118,7 @@ mod LiquidStaking {
     #[constructor]
     fn constructor(
         ref self: ContractState,
-        strk_address: ContractAddress,
+        strk_token: ContractAddress,
         pool_contract: ContractAddress,
         delegator_class_hash: ClassHash,
         ls_token_class_hash: ClassHash,
@@ -130,7 +130,7 @@ mod LiquidStaking {
         self._validate_fee_strategy(FeeStrategy::Flat(initial_platform_fee));
         assert(!platform_fee_recipient.is_zero(), 'Invalid fee recipient');
 
-        self.strk_address.write(strk_address);
+        self.strk_token.write(strk_token);
         self.pool_contract.write(pool_contract);
         self.delegator_class_hash.write(delegator_class_hash);
         self.ls_token.write(self._deploy_lst(ls_token_class_hash));
@@ -145,14 +145,23 @@ mod LiquidStaking {
 
     #[abi(embed_v0)]
     impl LiquidStakingImpl of ILiquidStaking<ContractState> {
+        /// Deposits STRK tokens and mints corresponding LS tokens.
+        ///
+        /// # Arguments
+        ///
+        /// * `amount` - The amount of STRK tokens to deposit
+        ///
+        /// # Returns
+        ///
+        /// The number of LS tokens minted
         fn deposit(ref self: ContractState, amount: u256) -> u256 {
             self.pausable.assert_not_paused();
             self.reentrancy_guard.start();
 
             assert(amount >= self.min_deposit_amount.read(), 'Deposit amount too low');
 
-            let caller = get_caller_address();
-            let strk_dispatcher = IERC20Dispatcher { contract_address: self.strk_address.read() };
+            let caller = get_tx_info().account_contract_address;
+            let strk_dispatcher = IERC20Dispatcher { contract_address: self.strk_token.read() };
             let ls_token = ILSTokenDispatcher { contract_address: self.ls_token.read() };
 
             // Transfer STRK tokens from caller to this contract
@@ -173,6 +182,11 @@ mod LiquidStaking {
             shares
         }
 
+        /// Requests a withdrawal of LS tokens.
+        ///
+        /// # Arguments
+        ///
+        /// * `shares` - The amount of LS tokens to withdraw
         fn request_withdrawal(ref self: ContractState, shares: u256) {
             self.pausable.assert_not_paused();
             self.reentrancy_guard.start();
@@ -195,6 +209,7 @@ mod LiquidStaking {
             self.reentrancy_guard.end();
         }
 
+        /// Processes available withdrawal requests for the caller.
         fn withdraw(ref self: ContractState) {
             self.pausable.assert_not_paused();
             self.reentrancy_guard.start();
@@ -203,7 +218,7 @@ mod LiquidStaking {
 
             assert(total_assets_to_withdraw > 0, 'No withdrawable requests');
 
-            let strk_token = IERC20Dispatcher { contract_address: self.strk_address.read() };
+            let strk_token = IERC20Dispatcher { contract_address: self.strk_token.read() };
             strk_token.transfer(caller, total_assets_to_withdraw);
 
             self.emit(Events::Withdraw { user: caller, total_assets: total_assets_to_withdraw });
@@ -211,6 +226,8 @@ mod LiquidStaking {
             self.reentrancy_guard.end();
         }
 
+        /// Processes pending deposits and withdrawals, and collects rewards.
+        /// Can only be called by an account with the OPERATOR_ROLE.
         fn process_batch(ref self: ContractState) {
             self.pausable.assert_not_paused();
             self.access_control.assert_only_role(OPERATOR_ROLE);
@@ -228,6 +245,12 @@ mod LiquidStaking {
             self.reentrancy_guard.end();
         }
 
+        /// Sets a new fee strategy for the protocol.
+        /// Can only be called by an account with the ADMIN_ROLE.
+        ///
+        /// # Arguments
+        ///
+        /// * `new_strategy` - The new fee strategy to set
         fn set_fee_strategy(ref self: ContractState, new_strategy: FeeStrategy) {
             self.access_control.assert_only_role(ADMIN_ROLE);
             self._validate_fee_strategy(new_strategy);
@@ -235,22 +258,38 @@ mod LiquidStaking {
             self.emit(Events::FeeStrategyChanged { new_strategy });
         }
 
+        /// Sets a new recipient for the platform fees.
+        /// Can only be called by an account with the ADMIN_ROLE.
+        ///
+        /// # Arguments
+        ///
+        /// * `recipient` - The address of the new fee recipient
         fn set_platform_fee_recipient(ref self: ContractState, recipient: ContractAddress) {
             self.access_control.assert_only_role(ADMIN_ROLE);
             assert(!recipient.is_zero(), 'Invalid fee recipient');
             self.platform_fee_recipient.write(recipient);
         }
 
+        /// Pauses the contract.
+        /// Can only be called by an account with the PAUSER_ROLE.
         fn pause(ref self: ContractState) {
             self.access_control.assert_only_role(PAUSER_ROLE);
             self.pausable.pause();
         }
 
+        /// Unpauses the contract.
+        /// Can only be called by an account with the PAUSER_ROLE
         fn unpause(ref self: ContractState) {
             self.access_control.assert_only_role(PAUSER_ROLE);
             self.pausable.unpause();
         }
 
+        /// Sets a new unavailability period for withdrawals.
+        /// Can only be called by an account with the ADMIN_ROLE.
+        ///
+        /// # Arguments
+        ///
+        /// * `new_period` - The new unavailability period in seconds
         fn set_unavailability_period(ref self: ContractState, new_period: u64) {
             self.access_control.assert_only_role(ADMIN_ROLE);
             let old_period = self.withdrawal_window_period.read();
@@ -258,6 +297,12 @@ mod LiquidStaking {
             self.emit(Events::UnavailabilityPeriodChanged { old_period, new_period });
         }
 
+        /// Upgrades the contract to a new implementation.
+        /// Can only be called by an account with the UPGRADER_ROLE.
+        ///
+        /// # Arguments
+        ///
+        /// * `new_class_hash` - The class hash of the new implementation
         //TODO: add time lock
         fn upgrade(ref self: ContractState, new_class_hash: ClassHash) {
             self.access_control.assert_only_role(UPGRADER_ROLE);
@@ -285,6 +330,9 @@ mod LiquidStaking {
 
     #[generate_trait]
     impl InternalFunctions of InternalFunctionsTrait {
+        /// Initializes delegators for the contract.
+        ///
+        /// This function is called during the contract constructor.
         fn _initialize_delegators(ref self: ContractState) {
             let mut i: u8 = 0;
             while i < NUM_DELEGATORS {
@@ -303,10 +351,22 @@ mod LiquidStaking {
             };
         }
 
+        /// Processes a withdrawal request for LS tokens.
+        ///
+        /// # Arguments
+        ///
+        /// * `shares` - The amount of LS tokens to withdraw
+        ///
+        /// # Returns
+        ///
+        /// A tuple containing the caller's address, the amount of assets to withdraw, and the
+        /// withdrawal time.
+        ///
+        /// This function is called by `request_withdrawal`.
         fn _process_withdrawal_request(
             ref self: ContractState, shares: u256
         ) -> (ContractAddress, u256, u64) {
-            let caller = get_caller_address();
+            let caller = get_tx_info().account_contract_address;
             let ls_token = ILSTokenDispatcher { contract_address: self.ls_token.read() };
 
             let assets = ls_token.preview_redeem(shares);
@@ -327,14 +387,23 @@ mod LiquidStaking {
             (caller, assets, withdrawal_time)
         }
 
+        /// Processes all available withdrawal requests for a user.
+        ///
+        /// # Returns
+        ///
+        /// A tuple containing the caller's address and the total amount of assets to withdraw.
+        ///
+        /// This function is called by `withdraw`.
         fn _process_withdrawals(ref self: ContractState) -> (ContractAddress, u256) {
-            let caller = get_caller_address();
+            let caller = get_tx_info().account_contract_address;
             let current_time = get_block_timestamp();
             let mut total_assets_to_withdraw = 0_u256;
 
             let requests = self.get_available_withdrawal_requests(caller);
 
-            for (request_id, _) in requests {
+            for (
+                request_id, _
+            ) in requests {
                 let request = self.withdrawal_requests.read((caller, request_id));
                 assert(request.assets > 0, 'Invalid request ID');
                 assert(current_time >= request.withdrawal_time, 'Request not ready');
@@ -352,16 +421,34 @@ mod LiquidStaking {
             (caller, total_assets_to_withdraw)
         }
 
+
+        /// Adds a deposit to the pending queue.
+        ///
+        /// # Arguments
+        ///
+        /// * `amount` - The amount of tokens to add to the pending deposits
+        ///
+        /// This function is called by `deposit`.
         fn _add_deposit_to_queue(ref self: ContractState, amount: u256) {
             self.total_pending_deposits.write(self.total_pending_deposits.read() + amount);
             self.emit(Events::DepositAddedInQueue { amount });
         }
 
+        /// Adds a withdrawal to the pending queue.
+        ///
+        /// # Arguments
+        ///
+        /// * `amount` - The amount of tokens to add to the pending withdrawals
+        ///
+        /// This function is called by `request_withdrawal`.
         fn _add_withdrawal_to_queue(ref self: ContractState, amount: u256) {
             self.total_pending_withdrawals.write(self.total_pending_withdrawals.read() + amount);
             self.emit(Events::WithdrawalAddedInQueue { amount });
         }
 
+        /// Processes pending deposits and withdrawals.
+        ///
+        /// This function is called by `process_batch`.
         fn _process_batch(ref self: ContractState) {
             let current_time = get_block_timestamp();
             //assert(current_time >= self.last_processing_time.read() + ONE_DAY, 'Too early');
@@ -394,6 +481,9 @@ mod LiquidStaking {
                 );
         }
 
+        /// Processes withdrawals for all delegators.
+        ///
+        /// This function is called by `process_batch`.
         fn _delegator_withdraw(ref self: ContractState) {
             let now = get_block_timestamp();
             // 델리게이터 상태 확인 및 출금 처리
@@ -401,13 +491,12 @@ mod LiquidStaking {
             while i < NUM_DELEGATORS {
                 let (is_available, available_time) = self.delegator_status.read(i);
 
-                // 델리게이터가 사용 불가능하지만 사용 가능 시간이 지난
-                // 경우
+                // If the delegator is unavailable but the available time has passed
                 if !is_available && now >= available_time {
                     let delegator_address = self.delegators.read(i);
                     let delegator = IDelegatorDispatcher { contract_address: delegator_address, };
 
-                    // 델리게이터의 출금 처리 호출
+                   // Call the delegator's withdrawal process
                     let withdrawn_amount = delegator.process_withdrawal();
                     self
                         .emit(
@@ -416,7 +505,7 @@ mod LiquidStaking {
                             }
                         );
 
-                    // 델리게이터 상태를 다시 사용 가능하도록 업데이트
+                    // Update the delegator status to available again
                     self.delegator_status.write(i, (true, now));
                     self
                         .emit(
@@ -430,12 +519,19 @@ mod LiquidStaking {
             }
         }
 
+        /// Delegates tokens to the available delegator with the least stake.
+        ///
+        /// # Arguments
+        ///
+        /// * `amount` - The amount of tokens to delegate
+        ///
+        /// This function is called by `_process_batch`.
         fn _delegate_to_available_delegator(ref self: ContractState, amount: u256) {
             let mut least_stake_index: u8 = 0;
             let mut least_stake: u256 = Bounded::<u256>::MAX;
             let mut found_available = false;
 
-            // 가장 적은 스테이크를 가진 가용 델리게이터 찾기
+            // Find the available delegator with the least stake
             let mut i: u8 = 0;
             while i < NUM_DELEGATORS {
                 if self._is_delegator_available(i) {
@@ -453,21 +549,28 @@ mod LiquidStaking {
                 i += 1;
             };
 
-            // 가용한 델리게이터를 찾지 못한 경우
+            // If no available delegator is found
             assert(found_available, 'No available delegators');
 
-            // 찾은 델리게이터에게 위임
+            // Delegate to the found delegator
             let delegator = IDelegatorDispatcher {
                 contract_address: self.delegators.read(least_stake_index)
             };
 
             // Transfer STRK directly to the delegator
-            let strk_token = IERC20Dispatcher { contract_address: self.strk_address.read() };
+            let strk_token = IERC20Dispatcher { contract_address: self.strk_token.read() };
             strk_token.transfer(delegator.contract_address, amount);
 
             delegator.delegate(amount);
         }
 
+        /// Requests withdrawals from available delegators to fulfill the given amount.
+        ///
+        /// # Arguments
+        ///
+        /// * `amount` - The total amount of tokens to withdraw
+        ///
+        /// This function is called by `_process_batch`.
         fn _request_withdrawal_from_available_delegator(ref self: ContractState, amount: u256) {
             let mut remaining_amount = amount;
 
@@ -537,16 +640,39 @@ mod LiquidStaking {
             assert(remaining_amount == 0, 'Insufficient available funds');
         }
 
+        /// Checks if a delegator is available.
+        ///
+        /// # Arguments
+        ///
+        /// * `index` - The index of the delegator to check
+        ///
+        /// # Returns
+        ///
+        /// `true` if the delegator is available, `false` otherwise.
+        ///
+        /// This function is called by `_delegate_to_available_delegator` and
+        /// `_request_withdrawal_from_available_delegator`.
         fn _is_delegator_available(self: @ContractState, index: u8) -> bool {
             let (status, _) = self.delegator_status.read(index);
             status
         }
 
+        /// Deploys a new delegator contract.
+        ///
+        /// # Arguments
+        ///
+        /// * `i` - The index of the delegator
+        ///
+        /// # Returns
+        ///
+        /// The address of the deployed delegator contract.
+        ///
+        /// This function is called by `_initialize_delegators`.
         fn _deploy_delegator(ref self: ContractState, i: u8) -> ContractAddress {
             let mut calldata: Array::<felt252> = array![];
             get_contract_address().serialize(ref calldata);
             self.pool_contract.read().serialize(ref calldata);
-            self.strk_address.read().serialize(ref calldata);
+            self.strk_token.read().serialize(ref calldata);
 
             let (deployed_address, _) = starknet::deploy_syscall(
                 self.delegator_class_hash.read(), i.into(), calldata.span(), false
@@ -558,6 +684,17 @@ mod LiquidStaking {
             deployed_address
         }
 
+        /// Deploys the LST (Liquid Staking Token) contract.
+        ///
+        /// # Arguments
+        ///
+        /// * `lst_class_hash` - The class hash of the LST contract
+        ///
+        /// # Returns
+        ///
+        /// The address of the deployed LST contract.
+        ///
+        /// This function is called during the contract constructor.
         fn _deploy_lst(ref self: ContractState, lst_class_hash: ClassHash) -> ContractAddress {
             let mut calldata: Array::<felt252> = array![];
             let name: ByteArray = "staked STRK";
@@ -565,7 +702,7 @@ mod LiquidStaking {
             name.serialize(ref calldata);
             symbol.serialize(ref calldata);
             get_contract_address().serialize(ref calldata);
-            self.strk_address.read().serialize(ref calldata);
+            self.strk_token.read().serialize(ref calldata);
 
             let (deployed_address, _) = starknet::deploy_syscall(
                 lst_class_hash, 0, calldata.span(), false
@@ -577,6 +714,13 @@ mod LiquidStaking {
             deployed_address
         }
 
+        /// Collects rewards from all delegators.
+        ///
+        /// # Returns
+        ///
+        /// The total amount of rewards collected.
+        ///
+        /// This function is called by `process_batch`.
         fn _collect_rewards_from_delegators(ref self: ContractState) -> u256 {
             let mut total_rewards: u256 = 0;
             let mut i: u8 = 0;
@@ -589,15 +733,23 @@ mod LiquidStaking {
             total_rewards
         }
 
+
+        /// Distributes collected rewards between the platform and LST holders.
+        ///
+        /// # Arguments
+        ///
+        /// * `total_rewards` - The total amount of rewards to distribute
+        ///
+        /// This function is called by `process_batch`.
         fn _distribute_rewards(ref self: ContractState, total_rewards: u256) {
             let platform_fee_amount = self._calculate_fee(total_rewards);
             let distributed_reward = total_rewards - platform_fee_amount;
 
-            let strk_address = IERC20Dispatcher { contract_address: self.strk_address.read() };
+            let strk_token = IERC20Dispatcher { contract_address: self.strk_token.read() };
 
             // Transfer platform fee
             let fee_recipient = self.platform_fee_recipient.read();
-            let transfer_success = strk_address.transfer(fee_recipient, platform_fee_amount);
+            let transfer_success = strk_token.transfer(fee_recipient, platform_fee_amount);
             assert(transfer_success, 'Platform fee transfer failed');
 
             // Distribute remaining rewards to LSToken holders
@@ -613,6 +765,13 @@ mod LiquidStaking {
                 );
         }
 
+        /// Validates the given fee strategy.
+        ///
+        /// # Arguments
+        ///
+        /// * `strategy` - The fee strategy to validate
+        ///
+        /// This function is called by `constructor` and `set_fee_strategy`.
         fn _validate_fee_strategy(self: @ContractState, strategy: FeeStrategy) {
             match strategy {
                 FeeStrategy::Flat(fee) => {
@@ -629,6 +788,17 @@ mod LiquidStaking {
             }
         }
 
+        /// Calculates the fee amount based on the current fee strategy.
+        ///
+        /// # Arguments
+        ///
+        /// * `amount` - The amount to calculate the fee for
+        ///
+        /// # Returns
+        ///
+        /// The calculated fee amount.
+        ///
+        /// This function is called by `_distribute_rewards`.
         fn _calculate_fee(self: @ContractState, amount: u256) -> u256 {
             match self.fee_strategy.read() {
                 FeeStrategy::Flat(fee) => (amount * fee.into()) / FEE_DENOMINATOR,
@@ -647,10 +817,20 @@ mod LiquidStaking {
 
     #[abi(embed_v0)]
     impl LiquidStakingViewImpl of ILiquidStakingView<ContractState> {
+        /// Returns the address of the Liquid Staking Token (LST) contract.
+        ///
+        /// # Returns
+        ///
+        /// The ContractAddress of the LST contract.
         fn get_lst_address(self: @ContractState) -> ContractAddress {
             self.ls_token.read()
         }
 
+        /// Returns an array of all delegator addresses.
+        ///
+        /// # Returns
+        ///
+        /// An Array of ContractAddress representing all delegators.
         fn get_delegators_address(self: @ContractState) -> Array<ContractAddress> {
             let mut delegators = ArrayTrait::new();
             let mut i = 0;
@@ -660,14 +840,34 @@ mod LiquidStaking {
             delegators
         }
 
+        /// Returns the current fee strategy of the contract.
+        ///
+        /// # Returns
+        ///
+        /// The current FeeStrategy.
         fn get_fee_strategy(self: @ContractState) -> FeeStrategy {
             self.fee_strategy.read()
         }
 
+        /// Returns the address of the current platform fee recipient.
+        ///
+        /// # Returns
+        ///
+        /// The ContractAddress of the platform fee recipient.
         fn get_platform_fee_recipient(self: @ContractState) -> ContractAddress {
             self.platform_fee_recipient.read()
         }
 
+
+        /// Calculates the total withdrawable amount for a given user.
+        ///
+        /// # Arguments
+        ///
+        /// * `user` - The address of the user to check
+        ///
+        /// # Returns
+        ///
+        /// The total withdrawable amount as a u256.
         fn get_withdrawable_amount(self: @ContractState, user: ContractAddress) -> u256 {
             let current_time = get_block_timestamp();
             let mut total_withdrawable = 0_u256;
@@ -690,6 +890,15 @@ mod LiquidStaking {
             total_withdrawable
         }
 
+        /// Retrieves all withdrawal requests for a given user.
+        ///
+        /// # Arguments
+        ///
+        /// * `user` - The address of the user to check
+        ///
+        /// # Returns
+        ///
+        /// An Array of WithdrawalRequest structs.
         fn get_all_withdrawal_requests(
             self: @ContractState, user: ContractAddress
         ) -> Array<WithdrawalRequest> {
@@ -711,6 +920,15 @@ mod LiquidStaking {
             requests
         }
 
+        /// Retrieves all available (ready to be withdrawn) withdrawal requests for a given user.
+        ///
+        /// # Arguments
+        ///
+        /// * `user` - The address of the user to check
+        ///
+        /// # Returns
+        ///
+        /// An Array of tuples, each containing a request ID (u32) and a WithdrawalRequest struct.
         fn get_available_withdrawal_requests(
             self: @ContractState, user: ContractAddress
         ) -> Array<(u32, WithdrawalRequest)> {
@@ -741,18 +959,38 @@ mod LiquidStaking {
             available_requests
         }
 
+        /// Returns the current unavailability period for withdrawals.
+        ///
+        /// # Returns
+        ///
+        /// The unavailability period in seconds as a u64.
         fn get_unavailability_period(self: @ContractState) -> u64 {
             self.withdrawal_window_period.read()
         }
 
+        /// Returns the total amount of pending deposits.
+        ///
+        /// # Returns
+        ///
+        /// The total pending deposits as a u256.
         fn get_pending_deposits(self: @ContractState) -> u256 {
             self.total_pending_deposits.read()
         }
 
+        /// Returns the total amount of pending withdrawals.
+        ///
+        /// # Returns
+        ///
+        /// The total pending withdrawals as a u256.
         fn get_pending_withdrawals(self: @ContractState) -> u256 {
             self.total_pending_withdrawals.read()
         }
 
+        /// Returns the total amount of pending withdrawals.
+        ///
+        /// # Returns
+        ///
+        /// The total pending withdrawals as a u256.
         fn get_last_processing_time(self: @ContractState) -> u64 {
             self.last_processing_time.read()
         }
