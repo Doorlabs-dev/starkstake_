@@ -187,6 +187,7 @@ mod Delegator {
         /// Collects rewards from the Starknet staking pool
         /// @return u256: Amount of rewards collected
         fn collect_rewards(ref self: ContractState) -> u256 {
+            if !self.is_in_pool.read(){ return 0; };
             self.pausable.assert_not_paused();
             self.reentrancy_guard.start();
             self.access_control.assert_only_role(LIQUID_STAKING_ROLE);

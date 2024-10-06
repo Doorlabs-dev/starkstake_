@@ -1,1 +1,7 @@
 target/
+
+*.copy*
+*.info
+
+.snfoundry_cache/
+.tool-versions
