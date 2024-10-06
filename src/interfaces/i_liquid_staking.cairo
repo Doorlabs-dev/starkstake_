@@ -40,10 +40,9 @@ mod Events{
     }
 
     #[derive(Drop, starknet::Event)]
-    struct WithdrawnMultiple {
+    struct Withdraw {
         user: ContractAddress,
         total_assets: u256,
-        processed_request_count: u32,
     }
 
     #[derive(Drop, starknet::Event)]
@@ -101,14 +100,14 @@ mod Events{
 trait ILiquidStaking<TContractState> {
     fn deposit(ref self: TContractState, amount: u256) -> u256;
     fn request_withdrawal(ref self: TContractState, shares: u256);
-    fn withdraw(ref self: TContractState, request_ids: Array<u32>);
+    fn withdraw(ref self: TContractState);
     fn process_batch(ref self: TContractState);
 
     fn set_fee_strategy(ref self: TContractState, new_strategy: FeeStrategy);
     fn set_platform_fee_recipient(ref self: TContractState, recipient: ContractAddress);
     fn pause(ref self: TContractState);
     fn unpause(ref self: TContractState);
-    
+
     fn set_unavailability_period(ref self: TContractState, new_period: u64);
 
     fn upgrade(ref self: TContractState, new_class_hash: ClassHash);
@@ -118,6 +117,8 @@ trait ILiquidStaking<TContractState> {
 
 #[starknet::interface] 
 trait ILiquidStakingView<TContractState> {
+    fn get_lst_address(self: @TContractState) -> ContractAddress;
+    fn get_delegators_address(self: @TContractState) -> Array<ContractAddress>;
     fn get_fee_strategy(self: @TContractState) -> FeeStrategy;
     fn get_platform_fee_recipient(self: @TContractState) -> ContractAddress;
     fn get_withdrawable_amount(self: @TContractState, user: ContractAddress) -> u256;

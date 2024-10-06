@@ -90,7 +90,7 @@ mod LiquidStaking {
         Deposit: Events::Deposit,
         DelegatorWithdrew: Events::DelegatorWithdrew,
         WithdrawalRequested: Events::WithdrawalRequested,
-        WithdrawnMultiple: Events::WithdrawnMultiple,
+        Withdraw: Events::Withdraw,
         RewardDistributed: Events::RewardDistributed,
         DelegatorAdded: Events::DelegatorAdded,
         DelegatorStatusChanged: Events::DelegatorStatusChanged,
@@ -192,11 +192,11 @@ mod LiquidStaking {
             self.reentrancy_guard.end();
         }
 
-        fn withdraw(ref self: ContractState, request_ids: Array<u32>) {
+        fn withdraw(ref self: ContractState) {
             self.pausable.assert_not_paused();
             self.reentrancy_guard.start();
 
-            let (caller, total_assets_to_withdraw) = self._process_withdrawals(request_ids.clone());
+            let (caller, total_assets_to_withdraw) = self._process_withdrawals();
 
             assert(total_assets_to_withdraw > 0, 'No withdrawable requests');
 
@@ -205,10 +205,9 @@ mod LiquidStaking {
 
             self
                 .emit(
-                    Events::WithdrawnMultiple {
+                    Events::Withdraw {
                         user: caller,
-                        total_assets: total_assets_to_withdraw,
-                        processed_request_count: request_ids.len()
+                        total_assets: total_assets_to_withdraw                    
                     }
                 );
 
@@ -332,7 +331,7 @@ mod LiquidStaking {
         }
 
         fn _process_withdrawals(
-            ref self: ContractState, request_ids: Array<u32>
+            ref self: ContractState
         ) -> (ContractAddress, u256) {
             let caller = get_tx_info().account_contract_address;
             let current_time = get_block_timestamp();
@@ -684,6 +683,19 @@ mod LiquidStaking {
 
     #[abi(embed_v0)]
     impl LiquidStakingViewImpl of ILiquidStakingView<ContractState> {
+        fn get_lst_address(self: @ContractState) -> ContractAddress {
+            self.ls_token.read()
+        }
+
+        fn get_delegators_address(self: @ContractState) -> Array<ContractAddress> {
+            let mut delegators = ArrayTrait::new();
+            let mut i = 0;
+            while i < NUM_DELEGATORS{
+                delegators.append(self.delegators.read(i));
+            };
+            delegators
+        }
+        
         fn get_fee_strategy(self: @ContractState) -> FeeStrategy {
             self.fee_strategy.read()
         }
