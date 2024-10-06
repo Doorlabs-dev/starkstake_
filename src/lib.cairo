@@ -6,7 +6,7 @@ mod contracts {
         #[cfg(test)]
         mod liquid_staking_test;
         #[cfg(test)]
-        mod isolated_test;
+        mod unit_test;
 
         mod mock {
             mod pool;
