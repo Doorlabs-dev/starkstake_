@@ -25,7 +25,9 @@ mod LiquidStaking {
         i_delegator::IDelegatorDispatcherTrait,
     };
 
-    use stake_stark::utils::constants::{ADMIN_ROLE, ONE_DAY, OPERATOR_ROLE, PAUSER_ROLE, UPGRADER_ROLE};
+    use stake_stark::utils::constants::{
+        ADMIN_ROLE, ONE_DAY, OPERATOR_ROLE, PAUSER_ROLE, UPGRADER_ROLE
+    };
 
     // Component declarations
     component!(path: AccessControlComponent, storage: oz_access_control, event: AccessControlEvent);
@@ -149,14 +151,15 @@ mod LiquidStaking {
 
             assert(amount >= self.min_deposit_amount.read(), 'Deposit amount too low');
 
-            let caller = get_tx_info().account_contract_address;
-            let strk_address = IERC20Dispatcher { contract_address: self.strk_address.read() };
+            let caller = get_caller_address();
+            let strk_dispatcher = IERC20Dispatcher { contract_address: self.strk_address.read() };
             let ls_token = ILSTokenDispatcher { contract_address: self.ls_token.read() };
 
             // Transfer STRK tokens from caller to this contract
-            let transfer_success = strk_address
-                .transfer_from(caller, get_contract_address(), amount);
-            assert(transfer_success, 'Transfer failed');
+            assert(
+                strk_dispatcher.transfer_from(caller, get_contract_address(), amount),
+                'Transfer failed'
+            );
 
             // Mint LS tokens to the user
             let shares = ls_token.mint(amount, caller);
@@ -203,13 +206,7 @@ mod LiquidStaking {
             let strk_token = IERC20Dispatcher { contract_address: self.strk_address.read() };
             strk_token.transfer(caller, total_assets_to_withdraw);
 
-            self
-                .emit(
-                    Events::Withdraw {
-                        user: caller,
-                        total_assets: total_assets_to_withdraw                    
-                    }
-                );
+            self.emit(Events::Withdraw { user: caller, total_assets: total_assets_to_withdraw });
 
             self.reentrancy_guard.end();
         }
@@ -309,7 +306,7 @@ mod LiquidStaking {
         fn _process_withdrawal_request(
             ref self: ContractState, shares: u256
         ) -> (ContractAddress, u256, u64) {
-            let caller = get_tx_info().account_contract_address;
+            let caller = get_caller_address();
             let ls_token = ILSTokenDispatcher { contract_address: self.ls_token.read() };
 
             let assets = ls_token.preview_redeem(shares);
@@ -330,10 +327,8 @@ mod LiquidStaking {
             (caller, assets, withdrawal_time)
         }
 
-        fn _process_withdrawals(
-            ref self: ContractState
-        ) -> (ContractAddress, u256) {
-            let caller = get_tx_info().account_contract_address;
+        fn _process_withdrawals(ref self: ContractState) -> (ContractAddress, u256) {
+            let caller = get_caller_address();
             let current_time = get_block_timestamp();
             let mut total_assets_to_withdraw = 0_u256;
 
@@ -565,7 +560,7 @@ mod LiquidStaking {
 
         fn _deploy_lst(ref self: ContractState, lst_class_hash: ClassHash) -> ContractAddress {
             let mut calldata: Array::<felt252> = array![];
-            let name : ByteArray = "staked STRK";
+            let name: ByteArray = "staked STRK";
             let symbol: ByteArray = "stSTRK";
             name.serialize(ref calldata);
             symbol.serialize(ref calldata);
@@ -580,37 +575,6 @@ mod LiquidStaking {
             self.emit(Events::DelegatorAdded { delegator: deployed_address });
 
             deployed_address
-        }
-
-        fn _process_withdrawal_requests(
-            ref self: ContractState, user: ContractAddress, current_time: u64
-        ) -> (u256, u32) {
-            let mut total_assets_to_withdraw = 0_u256;
-            let mut processed_request_count = 0_u32;
-            let mut request_id = 0;
-
-            loop {
-                let request = self.withdrawal_requests.read((user, request_id));
-                if request.assets == 0 {
-                    break;
-                }
-                if current_time >= request.withdrawal_time {
-                    total_assets_to_withdraw += request.assets;
-                    processed_request_count += 1;
-                    // Clear the processed request
-                    self
-                        .withdrawal_requests
-                        .write(
-                            (user, request_id), WithdrawalRequest { assets: 0, withdrawal_time: 0 }
-                        );
-                }
-                request_id += 1;
-                if request_id >= self.next_withdrawal_request_id.read(user) {
-                    break;
-                }
-            };
-
-            (total_assets_to_withdraw, processed_request_count)
         }
 
         fn _collect_rewards_from_delegators(ref self: ContractState) -> u256 {
@@ -690,12 +654,12 @@ mod LiquidStaking {
         fn get_delegators_address(self: @ContractState) -> Array<ContractAddress> {
             let mut delegators = ArrayTrait::new();
             let mut i = 0;
-            while i < NUM_DELEGATORS{
+            while i < NUM_DELEGATORS {
                 delegators.append(self.delegators.read(i));
             };
             delegators
         }
-        
+
         fn get_fee_strategy(self: @ContractState) -> FeeStrategy {
             self.fee_strategy.read()
         }
@@ -752,7 +716,13 @@ mod LiquidStaking {
         ) -> Array<(u32, WithdrawalRequest)> {
             let mut available_requests = ArrayTrait::new();
             let current_time = get_block_timestamp();
-            let mut request_id = self.next_withdrawal_request_id.read(user) - 1;
+            let next_withdrawal_request_id = self.next_withdrawal_request_id.read(user);
+
+            let mut request_id = if next_withdrawal_request_id > 0 {
+                next_withdrawal_request_id - 1
+            } else {
+                return available_requests;
+            };
 
             loop {
                 let request = self.withdrawal_requests.read((user, request_id));
@@ -762,10 +732,10 @@ mod LiquidStaking {
                 if current_time >= request.withdrawal_time {
                     available_requests.append((request_id, request));
                 }
-                request_id -= 1;
-                if request_id >= Bounded::<u32>::MAX {
+                if request_id == 0 {
                     break;
                 }
+                request_id -= 1;
             };
 
             available_requests
