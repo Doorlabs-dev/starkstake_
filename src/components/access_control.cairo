@@ -85,12 +85,14 @@ mod RoleBasedAccessControlComponent {
             access_comp._grant_role(MINTER_ROLE, admin);
             access_comp._grant_role(PAUSER_ROLE, admin);
             access_comp._grant_role(UPGRADER_ROLE, admin);
+            access_comp._grant_role(OPERATOR_ROLE, admin);
 
             access_comp.set_role_admin(ADMIN_ROLE, ADMIN_ROLE);
             access_comp.set_role_admin(LIQUID_STAKING_ROLE, ADMIN_ROLE);
             access_comp.set_role_admin(MINTER_ROLE, ADMIN_ROLE);
             access_comp.set_role_admin(PAUSER_ROLE, ADMIN_ROLE);
             access_comp.set_role_admin(UPGRADER_ROLE, ADMIN_ROLE);
+            access_comp.set_role_admin(OPERATOR_ROLE, ADMIN_ROLE);
         }
 
         fn assert_only_role(self: @ComponentState<TContractState>, role: felt252) {
