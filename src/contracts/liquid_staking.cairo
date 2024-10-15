@@ -139,7 +139,7 @@ mod LiquidStaking {
         self.fee_strategy.write(FeeStrategy::Flat(initial_platform_fee));
         self.platform_fee_recipient.write(platform_fee_recipient);
         self.withdrawal_window_period.write(initial_withdrawal_window_period);
-        self.min_deposit_amount.write(10_000_000_000_000_000_000); // min deposit is 10 STRK
+        self.min_deposit_amount.write(100_000_000_000_000_000); // min deposit is 0.1 STRK
 
         self.access_control.initialize(admin);
         self.access_control.grant_role(OPERATOR_ROLE, operator);
@@ -157,7 +157,7 @@ mod LiquidStaking {
         /// # Returns
         ///
         /// The number of LS tokens minted
-        fn deposit(ref self: ContractState, amount: u256, receiver: Option<ContractAddress>) -> u256 {
+        fn deposit(ref self: ContractState, amount: u256, receiver: ContractAddress) -> u256 {
             self.pausable.assert_not_paused();
             self.reentrancy_guard.start();
 
@@ -174,9 +174,10 @@ mod LiquidStaking {
             );
 
             // Mint LS tokens to the user
-            let shares = match receiver{
-                Option::Some(address) => ls_token.mint(amount, address),
-                Option::None(_) => ls_token.mint(amount, caller),
+            let shares = if receiver.is_zero() {
+                ls_token.mint(amount, caller)
+            } else {
+                ls_token.mint(amount, receiver)
             };
 
             assert(shares > 0, 'No shares minted');
@@ -503,7 +504,7 @@ mod LiquidStaking {
                     let delegator_address = self.delegators.read(i);
                     let delegator = IDelegatorDispatcher { contract_address: delegator_address, };
 
-                   // Call the delegator's withdrawal process
+                    // Call the delegator's withdrawal process
                     let withdrawn_amount = delegator.process_withdrawal();
                     self
                         .emit(
@@ -682,7 +683,10 @@ mod LiquidStaking {
             self.strk_token.read().serialize(ref calldata);
 
             let (deployed_address, _) = starknet::deploy_syscall(
-                self.delegator_class_hash.read(), i.into(), calldata.span(), false
+                self.delegator_class_hash.read(),
+                get_block_timestamp().into() + i.into(),
+                calldata.span(),
+                false
             )
                 .unwrap_syscall();
 

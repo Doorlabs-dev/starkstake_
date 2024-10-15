@@ -230,7 +230,7 @@ mod LSToken {
             let liquid_staking = ILiquidStakingDispatcher {
                 contract_address: self.liquid_staking_protocol.read()
             };
-            let minted_shares = liquid_staking.deposit(assets, Option::Some(receiver));
+            let minted_shares = liquid_staking.deposit(assets, receiver);
 
             assert(minted_shares == shares, 'Shares mismatch');
 
