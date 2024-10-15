@@ -4,7 +4,7 @@ mod components {
 mod contracts {
     mod tests {
         #[cfg(test)]
-        mod liquid_staking_test;
+        mod stake_stark_test;
         #[cfg(test)]
         mod unit_test;
 
@@ -15,13 +15,13 @@ mod contracts {
         }
     }
     mod delegator;
-    mod liquid_staking;
-    mod ls_token;
+    mod stake_stark;
+    mod stSTRK;
 }
 mod interfaces {
     mod i_delegator;
-    mod i_liquid_staking;
-    mod i_ls_token;
+    mod i_stake_stark;
+    mod i_stSTRK;
     mod i_starknet_staking;
 }
 mod utils {

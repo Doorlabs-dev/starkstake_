@@ -106,7 +106,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "stake_stark"
+name = "stakestark_"
 version = "0.1.0"
 dependencies = [
  "alexandria_math",

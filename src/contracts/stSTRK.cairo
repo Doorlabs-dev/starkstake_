@@ -1,5 +1,5 @@
 #[starknet::contract]
-mod LSToken {
+mod stSTRK {
     use starknet::{ContractAddress, ClassHash, get_caller_address, get_contract_address};
     use core::num::traits::Bounded;
     use openzeppelin::token::erc20::ERC20Component;
@@ -10,17 +10,17 @@ mod LSToken {
     use openzeppelin_introspection::src5::SRC5Component;
     use openzeppelin::token::erc20::interface::{IERC20Dispatcher, IERC20DispatcherTrait};
 
-    use stake_stark::components::access_control::RoleBasedAccessControlComponent;
+    use stakestark_::components::access_control::RoleBasedAccessControlComponent;
 
-    use stake_stark::utils::constants::{
+    use stakestark_::utils::constants::{
         ADMIN_ROLE, MINTER_ROLE, BURNER_ROLE, PAUSER_ROLE, UPGRADER_ROLE
     };
 
-    use stake_stark::interfaces::{
-        i_ls_token::ILSToken, i_ls_token::Events, i_liquid_staking::ILiquidStakingDispatcher,
-        i_liquid_staking::ILiquidStakingDispatcherTrait,
-        i_liquid_staking::ILiquidStakingViewDispatcher,
-        i_liquid_staking::ILiquidStakingViewDispatcherTrait
+    use stakestark_::interfaces::{
+        i_stSTRK::IstSTRK, i_stSTRK::Events, i_stake_stark::IStakeStarkDispatcher,
+        i_stake_stark::IStakeStarkDispatcherTrait,
+        i_stake_stark::IStakeStarkViewDispatcher,
+        i_stake_stark::IStakeStarkViewDispatcherTrait
     };
 
     // Component declarations
@@ -60,7 +60,7 @@ mod LSToken {
 
     #[storage]
     struct Storage {
-        liquid_staking_protocol: ContractAddress,
+        stake_stark: ContractAddress,
         asset: ContractAddress,
         total_assets: u256,
         #[substorage(v0)]
@@ -102,20 +102,20 @@ mod LSToken {
         RBACEvent: RoleBasedAccessControlComponent::Event,
     }
 
-    /// Initializes the LSToken contract
+    /// Initializes the stSTRK contract
     ///
     /// # Arguments
     ///
     /// * `name` - Name of the token
     /// * `symbol` - Symbol of the token
-    /// * `liquid_staking_protocol` - Address of the liquid staking protocol
+    /// * `stake_stark` - Address of the liquid staking protocol
     /// * `strk_token` - Address of the underlying asset
     #[constructor]
     fn constructor(
         ref self: ContractState,
         name: ByteArray,
         symbol: ByteArray,
-        liquid_staking_protocol: ContractAddress,
+        stake_stark: ContractAddress,
         strk_token: ContractAddress,
     ) {
         self.erc20.initializer(name, symbol);
@@ -123,16 +123,16 @@ mod LSToken {
         self.asset.write(strk_token);
         self.total_assets.write(0);
 
-        self.liquid_staking_protocol.write(liquid_staking_protocol);
+        self.stake_stark.write(stake_stark);
 
         // Grant roles
-        self.access_control.grant_role(UPGRADER_ROLE, liquid_staking_protocol);
-        self.access_control.grant_role(MINTER_ROLE, liquid_staking_protocol);
-        self.access_control.grant_role(BURNER_ROLE, liquid_staking_protocol);
+        self.access_control.grant_role(UPGRADER_ROLE, stake_stark);
+        self.access_control.grant_role(MINTER_ROLE, stake_stark);
+        self.access_control.grant_role(BURNER_ROLE, stake_stark);
     }
 
     #[abi(embed_v0)]
-    impl LSTokenImpl of ILSToken<ContractState> {
+    impl stSTRKImpl of IstSTRK<ContractState> {
         /// Returns the address of the underlying asset
         fn asset(self: @ContractState) -> ContractAddress {
             self.asset.read()
@@ -226,11 +226,11 @@ mod LSToken {
 
             let caller = get_caller_address();
 
-            // Call deposit function of LiquidStakingProtocol
-            let liquid_staking = ILiquidStakingDispatcher {
-                contract_address: self.liquid_staking_protocol.read()
+            // Call deposit function of StakeStarkProtocol
+            let stake_stark = IStakeStarkDispatcher {
+                contract_address: self.stake_stark.read()
             };
-            let minted_shares = liquid_staking.deposit(assets, receiver);
+            let minted_shares = stake_stark.deposit(assets, receiver);
 
             assert(minted_shares == shares, 'Shares mismatch');
 
@@ -369,11 +369,11 @@ mod LSToken {
                 self.erc20._approve(owner, caller, allowed - shares);
             }
 
-            // Call request_withdrawal function of LiquidStakingProtocol
-            let liquid_staking = ILiquidStakingDispatcher {
-                contract_address: self.liquid_staking_protocol.read()
+            // Call request_withdrawal function of StakeStarkProtocol
+            let stake_stark = IStakeStarkDispatcher {
+                contract_address: self.stake_stark.read()
             };
-            liquid_staking.request_withdrawal(shares);
+            stake_stark.request_withdrawal(shares);
 
             self.emit(Events::Withdraw { sender: caller, receiver, owner, assets, shares });
 
@@ -438,11 +438,11 @@ mod LSToken {
 
             let assets = self.preview_redeem(shares);
 
-            // Call request_withdrawal function of LiquidStakingProtocol
-            let liquid_staking = ILiquidStakingDispatcher {
-                contract_address: self.liquid_staking_protocol.read()
+            // Call request_withdrawal function of StakeStarkProtocol
+            let stake_stark = IStakeStarkDispatcher {
+                contract_address: self.stake_stark.read()
             };
-            liquid_staking.request_withdrawal(shares);
+            stake_stark.request_withdrawal(shares);
 
             self.emit(Events::Redeem { caller, receiver, owner, assets, shares });
 

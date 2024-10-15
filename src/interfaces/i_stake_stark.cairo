@@ -102,7 +102,7 @@ mod Events{
 }
 
 #[starknet::interface]
-trait ILiquidStaking<TContractState> {
+trait IStakeStark<TContractState> {
     fn deposit(ref self: TContractState, amount: u256, receiver: ContractAddress) -> u256;
     fn request_withdrawal(ref self: TContractState, shares: u256);
     fn withdraw(ref self: TContractState);
@@ -121,7 +121,7 @@ trait ILiquidStaking<TContractState> {
 }
 
 #[starknet::interface] 
-trait ILiquidStakingView<TContractState> {
+trait IStakeStarkView<TContractState> {
     fn get_lst_address(self: @TContractState) -> ContractAddress;
     fn get_delegators_address(self: @TContractState) -> Array<ContractAddress>;
     fn get_fee_strategy(self: @TContractState) -> FeeStrategy;

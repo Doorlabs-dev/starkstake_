@@ -14,13 +14,13 @@ mod Delegator {
     use openzeppelin_introspection::src5::SRC5Component;
     use openzeppelin::token::erc20::interface::{IERC20Dispatcher, IERC20DispatcherTrait};
 
-    use stake_stark::components::access_control::RoleBasedAccessControlComponent;
-    use stake_stark::interfaces::{
+    use stakestark_::components::access_control::RoleBasedAccessControlComponent;
+    use stakestark_::interfaces::{
         i_delegator::IDelegator, i_delegator::Events, i_starknet_staking::IPoolDispatcher,
         i_starknet_staking::IPoolDispatcherTrait
     };
 
-    use stake_stark::utils::constants::{ADMIN_ROLE, LIQUID_STAKING_ROLE};
+    use stakestark_::utils::constants::{ADMIN_ROLE, LIQUID_STAKING_ROLE};
 
     // Component declarations
     component!(path: AccessControlComponent, storage: oz_access_control, event: AccessControlEvent);
@@ -46,7 +46,7 @@ mod Delegator {
 
     #[storage]
     struct Storage {
-        liquid_staking_protocol: ContractAddress,
+        stake_stark: ContractAddress,
         pool_contract: ContractAddress,
         strk_token: ContractAddress,
         total_stake: u256,
@@ -92,24 +92,24 @@ mod Delegator {
     ///
     /// # Arguments
     ///
-    /// * `liquid_staking_protocol` - Address of the liquid staking protocol
+    /// * `stake_stark` - Address of the liquid staking protocol
     /// * `pool_contract` - Address of the Starknet staking pool contract
     /// * `strk_token` - Address of the STRK token
     #[constructor]
     fn constructor(
         ref self: ContractState,
-        liquid_staking_protocol: ContractAddress,
+        stake_stark: ContractAddress,
         pool_contract: ContractAddress,
         strk_token: ContractAddress,
     ) {
-        self.liquid_staking_protocol.write(liquid_staking_protocol);
+        self.stake_stark.write(stake_stark);
         self.pool_contract.write(pool_contract);
         self.strk_token.write(strk_token);
         self.total_stake.write(0);
         self.last_reward_claim_time.write(get_block_timestamp());
 
-        self.access_control.grant_role(ADMIN_ROLE, liquid_staking_protocol);
-        self.access_control.grant_role(LIQUID_STAKING_ROLE, liquid_staking_protocol);
+        self.access_control.grant_role(ADMIN_ROLE, stake_stark);
+        self.access_control.grant_role(LIQUID_STAKING_ROLE, stake_stark);
     }
 
     #[abi(embed_v0)]
@@ -134,7 +134,7 @@ mod Delegator {
             if !self.is_in_pool.read() {
                 // First time entering the pool
                 let success = pool
-                    .enter_delegation_pool(self.liquid_staking_protocol.read(), amount_u128);
+                    .enter_delegation_pool(self.stake_stark.read(), amount_u128);
                 assert(success, 'Failed to enter delegation pool');
                 self.is_in_pool.write(true);
             } else {
@@ -186,7 +186,7 @@ mod Delegator {
                 .into();
 
             let strk_token = IERC20Dispatcher { contract_address: self.strk_token.read() };
-            strk_token.transfer(self.liquid_staking_protocol.read(), withdrawn_amount);
+            strk_token.transfer(self.stake_stark.read(), withdrawn_amount);
 
             self.emit(Events::WithdrawalProcessed { amount: withdrawn_amount });
 
@@ -211,7 +211,7 @@ mod Delegator {
             let rewards: u256 = pool.claim_rewards(get_contract_address()).into();
 
             let strk_token = IERC20Dispatcher { contract_address: self.strk_token.read() };
-            strk_token.transfer(self.liquid_staking_protocol.read(), rewards);
+            strk_token.transfer(self.stake_stark.read(), rewards);
 
             self.last_reward_claim_time.write(get_block_timestamp());
 

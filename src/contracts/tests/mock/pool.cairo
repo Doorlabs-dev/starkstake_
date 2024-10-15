@@ -47,7 +47,7 @@ pub mod MockPool {
         SyscallResultTrait, syscalls::deploy_syscall, get_tx_info
     };
     use super::{PoolMemberInfo, PoolContractInfo};
-    use stake_stark::contracts::tests::mock::strk::{ISTRKDispatcher, ISTRKDispatcherTrait};
+    use stakestark_::contracts::tests::mock::strk::{ISTRKDispatcher, ISTRKDispatcherTrait};
 
     #[storage]
     struct Storage {

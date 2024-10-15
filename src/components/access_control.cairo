@@ -19,7 +19,7 @@ mod RoleBasedAccessControlComponent {
     use openzeppelin::access::accesscontrol::AccessControlComponent::InternalTrait as AccessInternalTrait;
     use openzeppelin_introspection::src5::SRC5Component;
 
-    use stake_stark::utils::constants::{
+    use stakestark_::utils::constants::{
         ADMIN_ROLE, LIQUID_STAKING_ROLE, MINTER_ROLE, PAUSER_ROLE, UPGRADER_ROLE, VALIDATOR_ROLE, OPERATOR_ROLE
     };
 
@@ -106,7 +106,7 @@ mod RoleBasedAccessControlComponent {
             self.assert_only_role(ADMIN_ROLE);
         }
 
-        fn assert_only_liquid_staking(self: @ComponentState<TContractState>) {
+        fn assert_only_stake_stark(self: @ComponentState<TContractState>) {
             self.assert_only_role(LIQUID_STAKING_ROLE);
         }
 

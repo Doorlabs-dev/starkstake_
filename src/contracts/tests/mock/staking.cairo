@@ -68,7 +68,7 @@ pub mod MockStaking {
         ContractAddress, ClassHash, get_caller_address, get_block_timestamp, get_contract_address,
         SyscallResultTrait, syscalls::deploy_syscall, get_tx_info
     };
-    use stake_stark::contracts::tests::mock::strk::{ISTRKDispatcher, ISTRKDispatcherTrait};
+    use stakestark_::contracts::tests::mock::strk::{ISTRKDispatcher, ISTRKDispatcherTrait};
     use super::{StakerInfo, StakerPoolInfo, StakingContractInfo};
 
     #[storage]

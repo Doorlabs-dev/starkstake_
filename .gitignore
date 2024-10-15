@@ -1,7 +1,9 @@
 target/
 
-*.copy*
 *.info
+.env*
 
 .snfoundry_cache/
-.tool-versions.env
+.tool-versions
+
+node_modules

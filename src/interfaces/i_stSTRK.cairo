@@ -43,7 +43,7 @@ mod Events{
 }
 
 #[starknet::interface]
-trait ILSToken<TContractState> {
+trait IstSTRK<TContractState> {
     fn asset(self: @TContractState) -> ContractAddress;
     fn total_assets(self: @TContractState) -> u256;
     fn convert_to_shares(self: @TContractState, assets: u256) -> u256;

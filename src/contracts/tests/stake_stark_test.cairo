@@ -5,18 +5,18 @@ use snforge_std::{declare, ContractClassTrait, DeclareResultTrait, ContractClass
 use starknet::class_hash::class_hash_const;
 use starknet::testing::{set_caller_address, set_contract_address, set_block_timestamp};
 
-use stake_stark::interfaces::i_liquid_staking::{
-    ILiquidStaking, ILiquidStakingDispatcher, ILiquidStakingDispatcherTrait,
-    ILiquidStakingView, ILiquidStakingViewDispatcher, ILiquidStakingViewDispatcherTrait,
+use stakestark_::interfaces::i_stake_stark::{
+    IStakeStark, IStakeStarkDispatcher, IStakeStarkDispatcherTrait,
+    IStakeStarkView, IStakeStarkViewDispatcher, IStakeStarkViewDispatcherTrait,
     FeeStrategy
 };
-use stake_stark::interfaces::i_ls_token::{
-    ILSToken, ILSTokenDispatcher, ILSTokenDispatcherTrait
+use stakestark_::interfaces::i_stSTRK::{
+    IstSTRK, IstSTRKDispatcher, IstSTRKDispatcherTrait
 };
 use openzeppelin::token::erc20::interface::{IERC20Dispatcher, IERC20DispatcherTrait};
-use stake_stark::contracts::tests::mock::staking::{IMockStaking, IMockStakingDispatcher, IMockStakingDispatcherTrait};
-use stake_stark::contracts::tests::mock::pool::{IMockPool, IMockPoolDispatcher, IMockPoolDispatcherTrait};
-use stake_stark::contracts::tests::mock::strk::{ISTRK, ISTRKDispatcher, ISTRKDispatcherTrait};
+use stakestark_::contracts::tests::mock::staking::{IMockStaking, IMockStakingDispatcher, IMockStakingDispatcherTrait};
+use stakestark_::contracts::tests::mock::pool::{IMockPool, IMockPoolDispatcher, IMockPoolDispatcherTrait};
+use stakestark_::contracts::tests::mock::strk::{ISTRK, ISTRKDispatcher, ISTRKDispatcherTrait};
 
 // Constants
 const INITIAL_SUPPLY: u256 = 1_000_000_000_000_000_000_000_000; // 1,000,000 STRK
@@ -30,16 +30,16 @@ struct TestSetup {
     strk_address: ContractAddress,
     staking: IMockStakingDispatcher,
     pool: IMockPoolDispatcher,
-    liquid_staking_contact: ContractAddress,
-    liquid_staking: ILiquidStakingDispatcher,
-    liquid_staking_view: ILiquidStakingViewDispatcher,
+    stake_stark_contact: ContractAddress,
+    stake_stark: IStakeStarkDispatcher,
+    stake_stark_view: IStakeStarkViewDispatcher,
     lst_address: ContractAddress,
     user: ContractAddress,
     admin: ContractAddress,
 }
 
 #[test]
-fn test_liquid_staking_system() {
+fn test_stake_stark_system() {
     let setup = deploy_and_setup();
     
     check_deployments(setup);
@@ -89,8 +89,8 @@ fn deploy_and_setup() -> TestSetup {
     let pool = IMockPoolDispatcher { contract_address: pool_contract };
 
     // Deploy liquid staking contract
-    let (liquid_staking_contact, liquid_staking, liquid_staking_view) = deploy_liquid_staking(strk_contract, pool_contract);
-    let lst_address = liquid_staking_view.get_lst_address();
+    let (stake_stark_contact, stake_stark, stake_stark_view) = deploy_stake_stark(strk_contract, pool_contract);
+    let lst_address = stake_stark_view.get_lst_address();
 
     // Mint some STRK to the user for testing
     strk.mint(user, (stake_amount * 2).into());
@@ -99,9 +99,9 @@ fn deploy_and_setup() -> TestSetup {
         strk_address: strk_contract,
         staking,
         pool,
-        liquid_staking_contact,
-        liquid_staking,
-        liquid_staking_view,
+        stake_stark_contact,
+        stake_stark,
+        stake_stark_view,
         lst_address,
         user,
         admin,
@@ -112,7 +112,7 @@ fn check_deployments(setup: TestSetup) {
     assert(setup.strk.contract_address.is_non_zero(), 'STRK not deployed');
     assert(setup.staking.contract_address.is_non_zero(), 'Staking not deployed');
     assert(setup.pool.contract_address.is_non_zero(), 'Pool not deployed');
-    assert(setup.liquid_staking.contract_address.is_non_zero(), 'LiquidStaking not deployed');
+    assert(setup.stake_stark.contract_address.is_non_zero(), 'StakeStark not deployed');
     assert(setup.lst_address.is_non_zero(), 'LST not deployed');
 }
 
@@ -120,37 +120,37 @@ fn test_deposit(setup: TestSetup) {
     let deposit_amount: u256 = 50_000_000_000_000_000_000; // 50 STRK
 
     cheat_caller_address(setup.strk_address, setup.user, CheatSpan::TargetCalls(1));
-    setup.strk.approve(setup.liquid_staking.contract_address, deposit_amount);
+    setup.strk.approve(setup.stake_stark.contract_address, deposit_amount);
 
-    cheat_caller_address(setup.liquid_staking_contact, setup.user, CheatSpan::TargetCalls(1));
-    let shares = setup.liquid_staking.deposit(deposit_amount);
+    cheat_caller_address(setup.stake_stark_contact, setup.user, CheatSpan::TargetCalls(1));
+    let shares = setup.stake_stark.deposit(deposit_amount);
 
     //assert(shares == IERC20Dispatcher{contract_address: setup.lst_address}.balance_of(setup.user),'share is not correct');
     assert(shares > 0, 'Deposit should return shares');
     
-    let pending_deposits = setup.liquid_staking_view.get_pending_deposits();
+    let pending_deposits = setup.stake_stark_view.get_pending_deposits();
     assert(pending_deposits == deposit_amount, 'Incorrect pending deposits');
 }
 
 fn test_request_withdrawal(setup: TestSetup) {
     let withdrawal_shares: u256 = 25_000_000_000_000_000_000; // 25 STRK worth of shares
 
-    cheat_caller_address(setup.liquid_staking_contact, setup.user, CheatSpan::TargetCalls(1));
-    setup.liquid_staking.request_withdrawal(withdrawal_shares);
+    cheat_caller_address(setup.stake_stark_contact, setup.user, CheatSpan::TargetCalls(1));
+    setup.stake_stark.request_withdrawal(withdrawal_shares);
 
-    let pending_withdrawals = setup.liquid_staking_view.get_pending_withdrawals();
+    let pending_withdrawals = setup.stake_stark_view.get_pending_withdrawals();
     assert(pending_withdrawals > 0, 'No pending withdrawals');
 
-    let withdrawal_requests = setup.liquid_staking_view.get_all_withdrawal_requests(setup.user);
+    let withdrawal_requests = setup.stake_stark_view.get_all_withdrawal_requests(setup.user);
     assert(withdrawal_requests.len() > 0, 'No withdrawal requests');
 }
 
 fn test_process_batch(setup: TestSetup) {
-    cheat_caller_address(setup.liquid_staking_contact, setup.admin, CheatSpan::TargetCalls(1));
-    setup.liquid_staking.process_batch();
+    cheat_caller_address(setup.stake_stark_contact, setup.admin, CheatSpan::TargetCalls(1));
+    setup.stake_stark.process_batch();
 
-    let pending_deposits = setup.liquid_staking_view.get_pending_deposits();
-    let pending_withdrawals = setup.liquid_staking_view.get_pending_withdrawals();
+    let pending_deposits = setup.stake_stark_view.get_pending_deposits();
+    let pending_withdrawals = setup.stake_stark_view.get_pending_withdrawals();
     
     assert(pending_deposits == 0, 'Pending deposits not processed');
     assert(pending_withdrawals == 0, 'Pending withdraw not processed');
@@ -160,13 +160,13 @@ fn test_withdraw(setup: TestSetup) {
     // Advance time to make withdrawal requests available
     start_cheat_block_timestamp_global(get_block_timestamp() + EXIT_WAIT_WINDOW + 1);
     
-    let available_requests = setup.liquid_staking_view.get_available_withdrawal_requests(setup.user);
+    let available_requests = setup.stake_stark_view.get_available_withdrawal_requests(setup.user);
     assert(available_requests.len() > 0, 'No available withdrawals');
 
-    cheat_caller_address(setup.liquid_staking_contact, setup.user, CheatSpan::TargetCalls(1));
-    setup.liquid_staking.withdraw();
+    cheat_caller_address(setup.stake_stark_contact, setup.user, CheatSpan::TargetCalls(1));
+    setup.stake_stark.withdraw();
 
-    let new_available_requests = setup.liquid_staking_view.get_available_withdrawal_requests(setup.user);
+    let new_available_requests = setup.stake_stark_view.get_available_withdrawal_requests(setup.user);
     assert(new_available_requests.len() < available_requests.len(), 'Withdrawal not processed');
     stop_cheat_block_timestamp_global();
 }
@@ -174,15 +174,15 @@ fn test_withdraw(setup: TestSetup) {
 fn test_fee_strategy(setup: TestSetup) {
     let new_fee = FeeStrategy::Flat(300); // 3% fee
     
-    cheat_caller_address(setup.liquid_staking_contact, setup.admin, CheatSpan::TargetCalls(1));
-    setup.liquid_staking.set_fee_strategy(new_fee);
+    cheat_caller_address(setup.stake_stark_contact, setup.admin, CheatSpan::TargetCalls(1));
+    setup.stake_stark.set_fee_strategy(new_fee);
 
-    let current_fee = setup.liquid_staking_view.get_fee_strategy();
+    let current_fee = setup.stake_stark_view.get_fee_strategy();
     assert(current_fee == new_fee, 'Fee strategy not updated');
 }
 
 fn test_lst_operations(setup: TestSetup) {
-    let lst_dispatcher = ILSTokenDispatcher { contract_address: setup.lst_address };
+    let lst_dispatcher = IstSTRKDispatcher { contract_address: setup.lst_address };
     let lst_erc20_dispatcher = IERC20Dispatcher { contract_address: setup.lst_address };
     // Test initial state
     let total_assets = lst_dispatcher.total_assets();
@@ -191,10 +191,10 @@ fn test_lst_operations(setup: TestSetup) {
     // Test deposit
     let deposit_amount: u256 = 50_000_000_000_000_000_000; // 50 STRK
     cheat_caller_address(setup.strk_address, setup.user, CheatSpan::TargetCalls(1));
-    setup.strk.approve(setup.liquid_staking_contact, deposit_amount);
+    setup.strk.approve(setup.stake_stark_contact, deposit_amount);
 
     cheat_caller_address(setup.lst_address, setup.user, CheatSpan::TargetCalls(1));
-    cheat_caller_address(setup.liquid_staking_contact, setup.user, CheatSpan::TargetCalls(1));
+    cheat_caller_address(setup.stake_stark_contact, setup.user, CheatSpan::TargetCalls(1));
     let shares = lst_dispatcher.deposit(deposit_amount, setup.user);
 
     // Check LST balance
@@ -219,7 +219,7 @@ fn test_lst_operations(setup: TestSetup) {
 
     // Test rebase (this should be called by the liquid staking contract)
     let new_total_assets = deposit_amount + 10_000_000_000_000_000_000; // Add 10 STRK as reward
-    cheat_caller_address(setup.lst_address, setup.liquid_staking_contact, CheatSpan::TargetCalls(1));
+    cheat_caller_address(setup.lst_address, setup.stake_stark_contact, CheatSpan::TargetCalls(1));
     lst_dispatcher.rebase(new_total_assets);
 
     let updated_total_assets = lst_dispatcher.total_assets();
@@ -262,10 +262,10 @@ fn deploy_mock_staking(strk_address: ContractAddress) -> (ContractAddress, IMock
 }
 
 // Helper function to deploy liquid staking contract
-fn deploy_liquid_staking(strk_address: ContractAddress, pool_contract: ContractAddress) -> (ContractAddress, ILiquidStakingDispatcher, ILiquidStakingViewDispatcher) {
-    let contract = declare("LiquidStaking").unwrap().contract_class();
+fn deploy_stake_stark(strk_address: ContractAddress, pool_contract: ContractAddress) -> (ContractAddress, IStakeStarkDispatcher, IStakeStarkViewDispatcher) {
+    let contract = declare("StakeStark").unwrap().contract_class();
     let delegator = declare("Delegator").unwrap().contract_class();
-    let ls_token = declare("LSToken").unwrap().contract_class();
+    let stSTRK = declare("stSTRK").unwrap().contract_class();
 
     let admin = starknet::contract_address_const::<'admin'>();
     let initial_platform_fee: u16 = 500; // 5%
@@ -276,7 +276,7 @@ fn deploy_liquid_staking(strk_address: ContractAddress, pool_contract: ContractA
     strk_address.serialize(ref calldata);
     pool_contract.serialize(ref calldata);
     delegator.class_hash.serialize(ref calldata);
-    ls_token.class_hash.serialize(ref calldata);
+    stSTRK.class_hash.serialize(ref calldata);
     initial_platform_fee.serialize(ref calldata);
     platform_fee_recipient.serialize(ref calldata);
     initial_withdrawal_window_period.serialize(ref calldata);
@@ -286,7 +286,7 @@ fn deploy_liquid_staking(strk_address: ContractAddress, pool_contract: ContractA
 
     (
         contract_address,
-        ILiquidStakingDispatcher { contract_address },
-        ILiquidStakingViewDispatcher { contract_address }
+        IStakeStarkDispatcher { contract_address },
+        IStakeStarkViewDispatcher { contract_address }
     )
 }

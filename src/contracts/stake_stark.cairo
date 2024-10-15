@@ -1,5 +1,5 @@
 #[starknet::contract]
-mod LiquidStaking {
+mod StakeStark {
     use core::num::traits::Bounded;
     use core::array::ArrayTrait;
     use starknet::{
@@ -15,17 +15,17 @@ mod LiquidStaking {
     use openzeppelin_introspection::src5::SRC5Component;
     use openzeppelin::token::erc20::interface::{IERC20Dispatcher, IERC20DispatcherTrait};
 
-    use stake_stark::components::access_control::RoleBasedAccessControlComponent;
+    use stakestark_::components::access_control::RoleBasedAccessControlComponent;
 
-    use stake_stark::interfaces::{
-        i_liquid_staking::Events, i_liquid_staking::ILiquidStaking,
-        i_liquid_staking::ILiquidStakingView, i_liquid_staking::FeeStrategy,
-        i_liquid_staking::WithdrawalRequest, i_ls_token::ILSTokenDispatcher,
-        i_ls_token::ILSTokenDispatcherTrait, i_delegator::IDelegatorDispatcher,
+    use stakestark_::interfaces::{
+        i_stake_stark::Events, i_stake_stark::IStakeStark,
+        i_stake_stark::IStakeStarkView, i_stake_stark::FeeStrategy,
+        i_stake_stark::WithdrawalRequest, i_stSTRK::IstSTRKDispatcher,
+        i_stSTRK::IstSTRKDispatcherTrait, i_delegator::IDelegatorDispatcher,
         i_delegator::IDelegatorDispatcherTrait,
     };
 
-    use stake_stark::utils::constants::{
+    use stakestark_::utils::constants::{
         ADMIN_ROLE, ONE_DAY, OPERATOR_ROLE, PAUSER_ROLE, UPGRADER_ROLE
     };
 
@@ -57,7 +57,7 @@ mod LiquidStaking {
 
     #[storage]
     struct Storage {
-        ls_token: ContractAddress,
+        stSTRK: ContractAddress,
         strk_token: ContractAddress,
         pool_contract: ContractAddress,
         delegators: Map<u8, ContractAddress>,
@@ -86,7 +86,7 @@ mod LiquidStaking {
         access_control: RoleBasedAccessControlComponent::Storage,
     }
 
-    #[event]
+    #[event] 
     #[derive(Drop, starknet::Event)]
     enum Event {
         Deposit: Events::Deposit,
@@ -122,7 +122,7 @@ mod LiquidStaking {
         strk_token: ContractAddress,
         pool_contract: ContractAddress,
         delegator_class_hash: ClassHash,
-        ls_token_class_hash: ClassHash,
+        stSTRK_class_hash: ClassHash,
         initial_platform_fee: u16,
         platform_fee_recipient: ContractAddress,
         initial_withdrawal_window_period: u64,
@@ -135,7 +135,7 @@ mod LiquidStaking {
         self.strk_token.write(strk_token);
         self.pool_contract.write(pool_contract);
         self.delegator_class_hash.write(delegator_class_hash);
-        self.ls_token.write(self._deploy_lst(ls_token_class_hash));
+        self.stSTRK.write(self._deploy_lst(stSTRK_class_hash));
         self.fee_strategy.write(FeeStrategy::Flat(initial_platform_fee));
         self.platform_fee_recipient.write(platform_fee_recipient);
         self.withdrawal_window_period.write(initial_withdrawal_window_period);
@@ -147,12 +147,13 @@ mod LiquidStaking {
     }
 
     #[abi(embed_v0)]
-    impl LiquidStakingImpl of ILiquidStaking<ContractState> {
+    impl StakeStarkImpl of IStakeStark<ContractState> {
         /// Deposits STRK tokens and mints corresponding LS tokens.
         ///
         /// # Arguments
         ///
         /// * `amount` - The amount of STRK tokens to deposit
+        /// * `receiver` - Address that will receive the minted shares
         ///
         /// # Returns
         ///
@@ -165,7 +166,7 @@ mod LiquidStaking {
 
             let caller = get_tx_info().account_contract_address;
             let strk_dispatcher = IERC20Dispatcher { contract_address: self.strk_token.read() };
-            let ls_token = ILSTokenDispatcher { contract_address: self.ls_token.read() };
+            let stSTRK = IstSTRKDispatcher { contract_address: self.stSTRK.read() };
 
             // Transfer STRK tokens from caller to this contract
             assert(
@@ -175,9 +176,9 @@ mod LiquidStaking {
 
             // Mint LS tokens to the user
             let shares = if receiver.is_zero() {
-                ls_token.mint(amount, caller)
+                stSTRK.mint(amount, caller)
             } else {
-                ls_token.mint(amount, receiver)
+                stSTRK.mint(amount, receiver)
             };
 
             assert(shares > 0, 'No shares minted');
@@ -332,7 +333,7 @@ mod LiquidStaking {
         //TODO: add time lock
         fn upgrade_lst(ref self: ContractState, new_class_hash: ClassHash) {
             self.access_control.assert_only_role(UPGRADER_ROLE);
-            ILSTokenDispatcher { contract_address: self.ls_token.read() }.upgrade(new_class_hash);
+            IstSTRKDispatcher { contract_address: self.stSTRK.read() }.upgrade(new_class_hash);
         }
     }
 
@@ -375,9 +376,9 @@ mod LiquidStaking {
             ref self: ContractState, shares: u256
         ) -> (ContractAddress, u256, u64) {
             let caller = get_tx_info().account_contract_address;
-            let ls_token = ILSTokenDispatcher { contract_address: self.ls_token.read() };
+            let stSTRK = IstSTRKDispatcher { contract_address: self.stSTRK.read() };
 
-            let assets = ls_token.preview_redeem(shares);
+            let assets = stSTRK.preview_redeem(shares);
             assert(assets > 0, 'Withdrawal amount too small');
 
             let current_time = get_block_timestamp();
@@ -390,7 +391,7 @@ mod LiquidStaking {
                 .withdrawal_requests
                 .write((caller, request_id), WithdrawalRequest { assets, withdrawal_time });
 
-            ls_token.burn(shares, caller);
+            stSTRK.burn(shares, caller);
 
             (caller, assets, withdrawal_time)
         }
@@ -763,10 +764,10 @@ mod LiquidStaking {
             let transfer_success = strk_token.transfer(fee_recipient, platform_fee_amount);
             assert(transfer_success, 'Platform fee transfer failed');
 
-            // Distribute remaining rewards to LSToken holders
-            let ls_token = ILSTokenDispatcher { contract_address: self.ls_token.read() };
-            let new_total_assets = ls_token.total_assets() + distributed_reward;
-            ls_token.rebase(new_total_assets);
+            // Distribute remaining rewards to stSTRK holders
+            let stSTRK = IstSTRKDispatcher { contract_address: self.stSTRK.read() };
+            let new_total_assets = stSTRK.total_assets() + distributed_reward;
+            stSTRK.rebase(new_total_assets);
 
             self
                 .emit(
@@ -827,14 +828,14 @@ mod LiquidStaking {
     }
 
     #[abi(embed_v0)]
-    impl LiquidStakingViewImpl of ILiquidStakingView<ContractState> {
+    impl StakeStarkViewImpl of IStakeStarkView<ContractState> {
         /// Returns the address of the Liquid Staking Token (LST) contract.
         ///
         /// # Returns
         ///
         /// The ContractAddress of the LST contract.
         fn get_lst_address(self: @ContractState) -> ContractAddress {
-            self.ls_token.read()
+            self.stSTRK.read()
         }
 
         /// Returns an array of all delegator addresses.
