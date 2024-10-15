@@ -163,7 +163,7 @@ mod LiquidStaking {
 
             assert(amount >= self.min_deposit_amount.read(), 'Deposit amount too low');
 
-            let caller = get_caller_address();//get_tx_info().account_contract_address;
+            let caller = get_tx_info().account_contract_address;
             let strk_dispatcher = IERC20Dispatcher { contract_address: self.strk_token.read() };
             let ls_token = ILSTokenDispatcher { contract_address: self.ls_token.read() };
 
@@ -373,7 +373,7 @@ mod LiquidStaking {
         fn _process_withdrawal_request(
             ref self: ContractState, shares: u256
         ) -> (ContractAddress, u256, u64) {
-            let caller = get_caller_address();//get_tx_info().account_contract_address;
+            let caller = get_tx_info().account_contract_address;
             let ls_token = ILSTokenDispatcher { contract_address: self.ls_token.read() };
 
             let assets = ls_token.preview_redeem(shares);
@@ -402,7 +402,7 @@ mod LiquidStaking {
         ///
         /// This function is called by `withdraw`.
         fn _process_withdrawals(ref self: ContractState) -> (ContractAddress, u256) {
-            let caller = get_caller_address();//get_tx_info().account_contract_address;
+            let caller = get_tx_info().account_contract_address;
             let current_time = get_block_timestamp();
             let mut total_assets_to_withdraw = 0_u256;
 
