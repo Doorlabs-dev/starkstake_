@@ -4,4 +4,4 @@ target/
 *.info
 
 .snfoundry_cache/
-.tool-versions
+.tool-versions.env
