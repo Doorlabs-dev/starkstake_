@@ -56,7 +56,7 @@ mod LSToken {
     impl InternalImpl = RoleBasedAccessControlComponent::InternalImpl<ContractState>;
 
     // Constant
-    const INITIAL_SHARES_PER_ASSET: u256 = 1_000_000_000_000_000_000; // 1e18
+    const INITIAL_SHARES_PER_ASSET: u256 = 1;
 
     #[storage]
     struct Storage {
@@ -109,18 +109,18 @@ mod LSToken {
     /// * `name` - Name of the token
     /// * `symbol` - Symbol of the token
     /// * `liquid_staking_protocol` - Address of the liquid staking protocol
-    /// * `asset` - Address of the underlying asset
+    /// * `strk_token` - Address of the underlying asset
     #[constructor]
     fn constructor(
         ref self: ContractState,
         name: ByteArray,
         symbol: ByteArray,
         liquid_staking_protocol: ContractAddress,
-        asset: ContractAddress,
+        strk_token: ContractAddress,
     ) {
         self.erc20.initializer(name, symbol);
 
-        self.asset.write(asset);
+        self.asset.write(strk_token);
         self.total_assets.write(0);
 
         self.liquid_staking_protocol.write(liquid_staking_protocol);
@@ -230,12 +230,9 @@ mod LSToken {
             let liquid_staking = ILiquidStakingDispatcher {
                 contract_address: self.liquid_staking_protocol.read()
             };
-            let minted_shares = liquid_staking.deposit(assets);
+            let minted_shares = liquid_staking.deposit(assets, Option::Some(receiver));
 
             assert(minted_shares == shares, 'Shares mismatch');
-
-            // Update total assets
-            self.total_assets.write(self.total_assets.read() + assets);
 
             self.emit(Events::Deposit { sender: caller, owner: receiver, assets, shares });
 
@@ -290,7 +287,7 @@ mod LSToken {
         fn mint(ref self: ContractState, assets: u256, receiver: ContractAddress) -> u256 {
             self.access_control.assert_only_role(MINTER_ROLE);
             self.pausable.assert_not_paused();
-            self.reentrancy_guard.start();
+            //self.reentrancy_guard.start();
 
             let shares = self.preview_mint(assets);
             assert(shares != 0, 'ZERO_SHARES');
@@ -308,7 +305,7 @@ mod LSToken {
                     }
                 );
 
-            self.reentrancy_guard.end();
+            //self.reentrancy_guard.end();
             shares
         }
 

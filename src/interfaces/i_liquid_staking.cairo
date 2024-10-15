@@ -46,6 +46,11 @@ mod Events{
     }
 
     #[derive(Drop, starknet::Event)]
+    struct StSRTKDeployed {
+        address: ContractAddress
+    }
+
+    #[derive(Drop, starknet::Event)]
     struct RewardDistributed {
         total_reward: u256,
         platform_fee_amount: u256,
@@ -98,7 +103,7 @@ mod Events{
 
 #[starknet::interface]
 trait ILiquidStaking<TContractState> {
-    fn deposit(ref self: TContractState, amount: u256) -> u256;
+    fn deposit(ref self: TContractState, amount: u256, receiver: Option<ContractAddress>) -> u256;
     fn request_withdrawal(ref self: TContractState, shares: u256);
     fn withdraw(ref self: TContractState);
     fn process_batch(ref self: TContractState);

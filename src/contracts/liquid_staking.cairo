@@ -94,6 +94,7 @@ mod LiquidStaking {
         WithdrawalRequested: Events::WithdrawalRequested,
         Withdraw: Events::Withdraw,
         RewardDistributed: Events::RewardDistributed,
+        StSRTKDeployed: Events::StSRTKDeployed,
         DelegatorAdded: Events::DelegatorAdded,
         DelegatorStatusChanged: Events::DelegatorStatusChanged,
         FeeStrategyChanged: Events::FeeStrategyChanged,
@@ -126,6 +127,7 @@ mod LiquidStaking {
         platform_fee_recipient: ContractAddress,
         initial_withdrawal_window_period: u64,
         admin: ContractAddress,
+        operator: ContractAddress,
     ) {
         self._validate_fee_strategy(FeeStrategy::Flat(initial_platform_fee));
         assert(!platform_fee_recipient.is_zero(), 'Invalid fee recipient');
@@ -140,6 +142,7 @@ mod LiquidStaking {
         self.min_deposit_amount.write(10_000_000_000_000_000_000); // min deposit is 10 STRK
 
         self.access_control.initialize(admin);
+        self.access_control.grant_role(OPERATOR_ROLE, operator);
         self._initialize_delegators();
     }
 
@@ -154,13 +157,13 @@ mod LiquidStaking {
         /// # Returns
         ///
         /// The number of LS tokens minted
-        fn deposit(ref self: ContractState, amount: u256) -> u256 {
+        fn deposit(ref self: ContractState, amount: u256, receiver: Option<ContractAddress>) -> u256 {
             self.pausable.assert_not_paused();
             self.reentrancy_guard.start();
 
             assert(amount >= self.min_deposit_amount.read(), 'Deposit amount too low');
 
-            let caller = get_tx_info().account_contract_address;
+            let caller = get_caller_address();//get_tx_info().account_contract_address;
             let strk_dispatcher = IERC20Dispatcher { contract_address: self.strk_token.read() };
             let ls_token = ILSTokenDispatcher { contract_address: self.ls_token.read() };
 
@@ -171,7 +174,11 @@ mod LiquidStaking {
             );
 
             // Mint LS tokens to the user
-            let shares = ls_token.mint(amount, caller);
+            let shares = match receiver{
+                Option::Some(address) => ls_token.mint(amount, address),
+                Option::None(_) => ls_token.mint(amount, caller),
+            };
+
             assert(shares > 0, 'No shares minted');
 
             self._add_deposit_to_queue(amount);
@@ -366,7 +373,7 @@ mod LiquidStaking {
         fn _process_withdrawal_request(
             ref self: ContractState, shares: u256
         ) -> (ContractAddress, u256, u64) {
-            let caller = get_tx_info().account_contract_address;
+            let caller = get_caller_address();//get_tx_info().account_contract_address;
             let ls_token = ILSTokenDispatcher { contract_address: self.ls_token.read() };
 
             let assets = ls_token.preview_redeem(shares);
@@ -395,7 +402,7 @@ mod LiquidStaking {
         ///
         /// This function is called by `withdraw`.
         fn _process_withdrawals(ref self: ContractState) -> (ContractAddress, u256) {
-            let caller = get_tx_info().account_contract_address;
+            let caller = get_caller_address();//get_tx_info().account_contract_address;
             let current_time = get_block_timestamp();
             let mut total_assets_to_withdraw = 0_u256;
 
@@ -709,7 +716,7 @@ mod LiquidStaking {
             )
                 .unwrap_syscall();
 
-            self.emit(Events::DelegatorAdded { delegator: deployed_address });
+            self.emit(Events::StSRTKDeployed { address: deployed_address });
 
             deployed_address
         }
@@ -836,6 +843,7 @@ mod LiquidStaking {
             let mut i = 0;
             while i < NUM_DELEGATORS {
                 delegators.append(self.delegators.read(i));
+                i += 1;
             };
             delegators
         }
