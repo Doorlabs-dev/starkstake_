@@ -1,0 +1,25 @@
+{
+  "name": "stakestark_",
+  "version": "1.0.0",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "deploy": "node scripts/deploy.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Doorlabs-dev/stakestark_.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/Doorlabs-dev/stakestark_/issues"
+  },
+  "homepage": "https://github.com/Doorlabs-dev/stakestark_#readme",
+  "description": "",
+  "dependencies": {
+    "dotenv": "^16.4.5",
+    "starknet": "^6.11.0"
+  }
+}
