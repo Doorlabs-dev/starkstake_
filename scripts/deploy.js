@@ -13,8 +13,6 @@ const provider = new RpcProvider({ nodeUrl: process.env.RPC_URL });
 const account = new Account(provider, process.env.ACCOUNT_ADDRESS, process.env.PRIVATE_KEY);
 
 async function main() {
-
-    // 1. Declare contracts
     const lstClassHash = await declareContract(LST_PATH);
     console.log("stSTRK Class Hash:", lstClassHash);
 
@@ -24,12 +22,12 @@ async function main() {
     const delegatorClassHash = await declareContract(DELEGATOR_PATH);
     console.log("Delegator Class Hash:", delegatorClassHash);
 
-    // 2. Deploy StakeStarkProtocol
     const liquidStakingAbi = json.parse(fs.readFileSync(LIQUID_STAKING_PATH)).abi;
     const constructorCalldata = CallData.compile({
         strk_token: process.env.STRK_TOKEN_ADDRESS,
         pool_contract: process.env.POOL_CONTRACT_ADDRESS,
         delegator_class_hash: delegatorClassHash,
+        initial_delegator_count: 22, // 22 initial delegators
         stSTRK_class_hash: lstClassHash,
         initial_platform_fee: 500, // 5% fee, adjust as needed
         platform_fee_recipient: process.env.PLATFORM_FEE_RECIPIENT,
@@ -46,23 +44,30 @@ async function main() {
     await provider.waitForTransaction(deployResponse.transaction_hash);
     console.log("StakeStarkProtocol deployed at:", deployResponse.contract_address);
 
-    // 3. Show addresses
     const liquidStakingContract = new Contract(liquidStakingAbi, deployResponse.contract_address, provider);
 
     const lstAddress = await liquidStakingContract.get_lst_address();
-    console.log("LST Address:", lstAddress.toString(16));
+    console.log("LST Address:", '0x' + lstAddress.toString(16));
 
     const delegatorAddresses = await liquidStakingContract.get_delegators_address();
-    console.log("Delegator Addresses:", delegatorAddresses.toString(16));
+    const delegatorAddressesHex = delegatorAddresses.map(address => '0x' + BigInt(address).toString(16));
+    console.log("Delegator Addresses:", delegatorAddressesHex);
 
-    // 4. Save deployment info to .deployed file
+    const classHashs = {
+        lstClassHash: '0x' + lstClassHash,
+        liquidStakingClassHash: '0x' + liquidStakingClassHash,
+        delegatorClassHash: '0x' + delegatorClassHash,
+    }
+
+    const contractAddresses = {
+        stakeStarkAddress: '0x' + deployResponse.contract_address,
+        lstAddress: '0x' + BigInt(lstAddress).toString(16),
+        delegatorAddresses: delegatorAddressesHex
+    }
+
     const deploymentInfo = {
-        lstClassHash: lstClassHash,
-        liquidStakingClassHash: liquidStakingClassHash,
-        delegatorClassHash: delegatorClassHash,
-        stakeStarkProtocolAddress: deployResponse.contract_address,
-        lstAddress: lstAddress.toString(16),
-        delegatorAddresses: delegatorAddresses.toString(16)
+        classHashs,
+        contractAddresses
     };
 
     fs.writeFileSync('.deployed', JSON.stringify(deploymentInfo, null, 2));
