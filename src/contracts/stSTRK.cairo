@@ -471,8 +471,8 @@ mod stSTRK {
         /// * `caller` - Address from which to burn shares
         fn burn(ref self: ContractState, share: u256, caller: ContractAddress) {
             self.access_control.assert_only_role(MINTER_ROLE);
-            self.erc20.burn(caller, share);
             let assets_to_burn = self.convert_to_assets(share);
+            self.erc20.burn(caller, share);
             self.total_assets.write(self.total_assets.read() - assets_to_burn);
         }
 
