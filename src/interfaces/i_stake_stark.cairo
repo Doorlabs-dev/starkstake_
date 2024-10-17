@@ -1,11 +1,4 @@
 use starknet::{ContractAddress, ClassHash};
-// Fee Strategy enum for the Strategy pattern
-#[derive(Drop, Copy, Serde, PartialEq, starknet::Store)]
-enum FeeStrategy {
-    Flat: u16,
-    Tiered: (u16, u16, u256), // (low_fee, high_fee, threshold)
-}
-
 #[derive(Drop, Serde, starknet::Store)]
 struct WithdrawalRequest {
     assets: u256,
@@ -72,8 +65,8 @@ mod Events{
     }
 
     #[derive(Drop, starknet::Event)]
-    struct FeeStrategyChanged {
-        new_strategy: super::FeeStrategy,
+    struct FeeRatioChanged {
+        new_ratio: u16,
     }
 
     #[derive(Drop, starknet::Event)]
@@ -108,7 +101,7 @@ trait IStakeStark<TContractState> {
     fn withdraw(ref self: TContractState);
     fn process_batch(ref self: TContractState);
 
-    fn set_fee_strategy(ref self: TContractState, new_strategy: FeeStrategy);
+    fn set_fee_ratio(ref self: TContractState, new_ratio: u16);
     fn set_platform_fee_recipient(ref self: TContractState, recipient: ContractAddress);
     fn pause(ref self: TContractState);
     fn unpause(ref self: TContractState);
@@ -124,7 +117,7 @@ trait IStakeStark<TContractState> {
 trait IStakeStarkView<TContractState> {
     fn get_lst_address(self: @TContractState) -> ContractAddress;
     fn get_delegators_address(self: @TContractState) -> Array<ContractAddress>;
-    fn get_fee_strategy(self: @TContractState) -> FeeStrategy;
+    fn get_fee_ratio(self: @TContractState) -> u16;
     fn get_platform_fee_recipient(self: @TContractState) -> ContractAddress;
     fn get_withdrawable_amount(self: @TContractState, user: ContractAddress) -> u256;
     fn get_all_withdrawal_requests(
