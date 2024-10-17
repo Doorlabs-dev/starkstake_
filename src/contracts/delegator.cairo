@@ -210,9 +210,6 @@ mod Delegator {
             let pool = IPoolDispatcher { contract_address: self.pool_contract.read() };
             let rewards: u256 = pool.claim_rewards(get_contract_address()).into();
 
-            let strk_token = IERC20Dispatcher { contract_address: self.strk_token.read() };
-            strk_token.transfer(self.stake_stark.read(), rewards);
-
             self.last_reward_claim_time.write(get_block_timestamp());
 
             self.emit(Events::RewardsClaimed { amount: rewards });
