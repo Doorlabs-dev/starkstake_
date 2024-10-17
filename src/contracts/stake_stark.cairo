@@ -19,7 +19,7 @@ mod StakeStark {
 
     use stakestark_::interfaces::{
         i_stake_stark::Events, i_stake_stark::IStakeStark,
-        i_stake_stark::IStakeStarkView, i_stake_stark::FeeStrategy,
+        i_stake_stark::IStakeStarkView,
         i_stake_stark::WithdrawalRequest, i_stSTRK::IstSTRKDispatcher,
         i_stSTRK::IstSTRKDispatcherTrait, i_delegator::IDelegatorDispatcher,
         i_delegator::IDelegatorDispatcherTrait,
@@ -52,7 +52,6 @@ mod StakeStark {
 
     // Constants
     const FEE_DENOMINATOR: u256 = 10000;
-    const NUM_DELEGATORS: u8 = 22;
     const MAX_FEE_PERCENTAGE: u16 = 1000; // 10%
 
     #[storage]
@@ -60,6 +59,7 @@ mod StakeStark {
         stSTRK: ContractAddress,
         strk_token: ContractAddress,
         pool_contract: ContractAddress,
+        num_delegators: u8,
         delegators: Map<u8, ContractAddress>,
         delegator_status: Map<u8, (bool, u64)>, // (available_time)
         withdrawal_requests: Map<(ContractAddress, u32), WithdrawalRequest>,
@@ -67,7 +67,7 @@ mod StakeStark {
         delegator_class_hash: ClassHash,
         platform_fee_recipient: ContractAddress,
         min_deposit_amount: u256,
-        fee_strategy: FeeStrategy,
+        fee_ratio: u16,
         withdrawal_window_period: u64,
         total_pending_deposits: u256,
         total_pending_withdrawals: u256,
@@ -97,7 +97,7 @@ mod StakeStark {
         StSRTKDeployed: Events::StSRTKDeployed,
         DelegatorAdded: Events::DelegatorAdded,
         DelegatorStatusChanged: Events::DelegatorStatusChanged,
-        FeeStrategyChanged: Events::FeeStrategyChanged,
+        FeeRatioChanged: Events::FeeRatioChanged,
         DepositAddedInQueue: Events::DepositAddedInQueue,
         WithdrawalAddedInQueue: Events::WithdrawalAddedInQueue,
         BatchProcessed: Events::BatchProcessed,
@@ -122,6 +122,7 @@ mod StakeStark {
         strk_token: ContractAddress,
         pool_contract: ContractAddress,
         delegator_class_hash: ClassHash,
+        initial_delegator_count: u8,
         stSTRK_class_hash: ClassHash,
         initial_platform_fee: u16,
         platform_fee_recipient: ContractAddress,
@@ -129,17 +130,18 @@ mod StakeStark {
         admin: ContractAddress,
         operator: ContractAddress,
     ) {
-        self._validate_fee_strategy(FeeStrategy::Flat(initial_platform_fee));
+        assert(initial_platform_fee <= MAX_FEE_PERCENTAGE, 'fee ratio too high');
         assert(!platform_fee_recipient.is_zero(), 'Invalid fee recipient');
 
         self.strk_token.write(strk_token);
         self.pool_contract.write(pool_contract);
         self.delegator_class_hash.write(delegator_class_hash);
+        self.num_delegators.write(initial_delegator_count);
         self.stSTRK.write(self._deploy_lst(stSTRK_class_hash));
-        self.fee_strategy.write(FeeStrategy::Flat(initial_platform_fee));
+        self.fee_ratio.write(initial_platform_fee);
         self.platform_fee_recipient.write(platform_fee_recipient);
         self.withdrawal_window_period.write(initial_withdrawal_window_period);
-        self.min_deposit_amount.write(100_000_000_000_000_000); // min deposit is 0.1 STRK
+        self.min_deposit_amount.write(100); // min deposit is 0.1 STRK
 
         self.access_control.initialize(admin);
         self.access_control.grant_role(OPERATOR_ROLE, operator);
@@ -254,17 +256,18 @@ mod StakeStark {
             self.reentrancy_guard.end();
         }
 
-        /// Sets a new fee strategy for the protocol.
+        /// Sets a new fee ratio for the protocol.
         /// Can only be called by an account with the ADMIN_ROLE.
         ///
         /// # Arguments
         ///
-        /// * `new_strategy` - The new fee strategy to set
-        fn set_fee_strategy(ref self: ContractState, new_strategy: FeeStrategy) {
+        /// * `new_ratio` - The new fee ratio to set
+        fn set_fee_ratio(ref self: ContractState, new_ratio: u16) {
             self.access_control.assert_only_role(ADMIN_ROLE);
-            self._validate_fee_strategy(new_strategy);
-            self.fee_strategy.write(new_strategy);
-            self.emit(Events::FeeStrategyChanged { new_strategy });
+            assert(new_ratio <= MAX_FEE_PERCENTAGE, 'Fee ratio too high');
+
+            self.fee_ratio.write(new_ratio);
+            self.emit(Events::FeeRatioChanged { new_ratio });
         }
 
         /// Sets a new recipient for the platform fees.
@@ -323,9 +326,8 @@ mod StakeStark {
             self.access_control.assert_only_role(UPGRADER_ROLE);
             self.delegator_class_hash.write(new_class_hash);
             let mut i: u8 = 0;
-            while i < NUM_DELEGATORS {
-                IDelegatorDispatcher { contract_address: self.delegators.read(i) }
-                    .upgrade(new_class_hash);
+            while i < self.num_delegators.read() {
+                IDelegatorDispatcher { contract_address: self.delegators.read(i) }.upgrade(new_class_hash);
                 i += 1;
             };
         }
@@ -344,7 +346,7 @@ mod StakeStark {
         /// This function is called during the contract constructor.
         fn _initialize_delegators(ref self: ContractState) {
             let mut i: u8 = 0;
-            while i < NUM_DELEGATORS {
+            while i < self.num_delegators.read() {
                 let delegator_address = self._deploy_delegator(i);
                 self.delegators.write(i, delegator_address);
                 self.delegator_status.write(i, (true, get_block_timestamp()));
@@ -497,13 +499,13 @@ mod StakeStark {
             let now = get_block_timestamp();
             // 델리게이터 상태 확인 및 출금 처리
             let mut i: u8 = 0;
-            while i < NUM_DELEGATORS {
+            while i < self.num_delegators.read() {
                 let (is_available, available_time) = self.delegator_status.read(i);
 
                 // If the delegator is unavailable but the available time has passed
                 if !is_available && now >= available_time {
                     let delegator_address = self.delegators.read(i);
-                    let delegator = IDelegatorDispatcher { contract_address: delegator_address, };
+                    let delegator = IDelegatorDispatcher { contract_address: delegator_address };
 
                     // Call the delegator's withdrawal process
                     let withdrawn_amount = delegator.process_withdrawal();
@@ -542,14 +544,16 @@ mod StakeStark {
 
             // Find the available delegator with the least stake
             let mut i: u8 = 0;
-            while i < NUM_DELEGATORS {
+            while i < self.num_delegators.read() {
                 if self._is_delegator_available(i) {
-                    let delegator = IDelegatorDispatcher {
-                        contract_address: self.delegators.read(i)
-                    };
+                    let delegator =  IDelegatorDispatcher { contract_address: self.delegators.read(i) };
                     let current_stake = delegator.get_total_stake();
 
-                    if current_stake < least_stake {
+                    if current_stake == 0 {
+                        least_stake_index = i;
+                        found_available = true;
+                        break;
+                    } else if current_stake < least_stake {
                         least_stake = current_stake;
                         least_stake_index = i;
                         found_available = true;
@@ -562,9 +566,7 @@ mod StakeStark {
             assert(found_available, 'No available delegators');
 
             // Delegate to the found delegator
-            let delegator = IDelegatorDispatcher {
-                contract_address: self.delegators.read(least_stake_index)
-            };
+            let delegator =  IDelegatorDispatcher { contract_address: self.delegators.read(least_stake_index)};
 
             // Transfer STRK directly to the delegator
             let strk_token = IERC20Dispatcher { contract_address: self.strk_token.read() };
@@ -588,11 +590,10 @@ mod StakeStark {
             let mut best_fit_index: u8 = 0;
             let mut best_fit_amount: u256 = 0;
 
-            while i < NUM_DELEGATORS {
+            while i < self.num_delegators.read() {
                 if self._is_delegator_available(i) {
-                    let delegator = IDelegatorDispatcher {
-                        contract_address: self.delegators.read(i)
-                    };
+                    let delegator = IDelegatorDispatcher { contract_address: self.delegators.read(i) };
+
                     let delegator_stake = delegator.get_total_stake();
 
                     if delegator_stake > 0 {
@@ -611,12 +612,10 @@ mod StakeStark {
 
             // Second pass: process withdrawal requests
             i = 0;
-            while remaining_amount > 0 && i < NUM_DELEGATORS {
-                let current_index = (best_fit_index + i) % NUM_DELEGATORS;
+            while remaining_amount > 0 && i < self.num_delegators.read() {
+                let current_index = (best_fit_index + i) % self.num_delegators.read();
                 if self._is_delegator_available(current_index) {
-                    let delegator = IDelegatorDispatcher {
-                        contract_address: self.delegators.read(current_index)
-                    };
+                    let delegator =IDelegatorDispatcher { contract_address: self.delegators.read(current_index) };
                     let delegator_stake = delegator.get_total_stake();
 
                     if delegator_stake > 0 {
@@ -736,7 +735,7 @@ mod StakeStark {
         fn _collect_rewards_from_delegators(ref self: ContractState) -> u256 {
             let mut total_rewards: u256 = 0;
             let mut i: u8 = 0;
-            while i < NUM_DELEGATORS {
+            while i < self.num_delegators.read() {
                 let delegator = IDelegatorDispatcher { contract_address: self.delegators.read(i) };
                 let delegator_rewards = delegator.collect_rewards();
                 total_rewards += delegator_rewards.into();
@@ -777,30 +776,7 @@ mod StakeStark {
                 );
         }
 
-        /// Validates the given fee strategy.
-        ///
-        /// # Arguments
-        ///
-        /// * `strategy` - The fee strategy to validate
-        ///
-        /// This function is called by `constructor` and `set_fee_strategy`.
-        fn _validate_fee_strategy(self: @ContractState, strategy: FeeStrategy) {
-            match strategy {
-                FeeStrategy::Flat(fee) => {
-                    assert(fee <= MAX_FEE_PERCENTAGE, 'Flat fee too high');
-                },
-                FeeStrategy::Tiered((
-                    low_fee, high_fee, threshold
-                )) => {
-                    assert(low_fee <= MAX_FEE_PERCENTAGE, 'Low fee too high');
-                    assert(high_fee <= MAX_FEE_PERCENTAGE, 'High fee too high');
-                    assert(low_fee < high_fee, 'Invalid fee tiers');
-                    assert(threshold > 0, 'Invalid threshold');
-                }
-            }
-        }
-
-        /// Calculates the fee amount based on the current fee strategy.
+        /// Calculates the fee amount based on the current fee ratio.
         ///
         /// # Arguments
         ///
@@ -812,18 +788,7 @@ mod StakeStark {
         ///
         /// This function is called by `_distribute_rewards`.
         fn _calculate_fee(self: @ContractState, amount: u256) -> u256 {
-            match self.fee_strategy.read() {
-                FeeStrategy::Flat(fee) => (amount * fee.into()) / FEE_DENOMINATOR,
-                FeeStrategy::Tiered((
-                    low_fee, high_fee, threshold
-                )) => {
-                    if amount <= threshold {
-                        (amount * low_fee.into()) / FEE_DENOMINATOR
-                    } else {
-                        (amount * high_fee.into()) / FEE_DENOMINATOR
-                    }
-                }
-            }
+             amount * self.fee_ratio.read().into() / FEE_DENOMINATOR
         }
     }
 
@@ -846,20 +811,20 @@ mod StakeStark {
         fn get_delegators_address(self: @ContractState) -> Array<ContractAddress> {
             let mut delegators = ArrayTrait::new();
             let mut i = 0;
-            while i < NUM_DELEGATORS {
+            while i < self.num_delegators.read() {
                 delegators.append(self.delegators.read(i));
                 i += 1;
             };
             delegators
         }
 
-        /// Returns the current fee strategy of the contract.
+        /// Returns the current fee ratio of the contract.
         ///
         /// # Returns
         ///
-        /// The current FeeStrategy.
-        fn get_fee_strategy(self: @ContractState) -> FeeStrategy {
-            self.fee_strategy.read()
+        /// The current Feeratio.
+        fn get_fee_ratio(self: @ContractState) -> u16 {
+            self.fee_ratio.read()
         }
 
         /// Returns the address of the current platform fee recipient.

@@ -31,9 +31,9 @@ async function main() {
         pool_contract: process.env.POOL_CONTRACT_ADDRESS,
         delegator_class_hash: delegatorClassHash,
         stSTRK_class_hash: lstClassHash,
-        initial_platform_fee: 100, // 1% fee, adjust as needed
+        initial_platform_fee: 500, // 5% fee, adjust as needed
         platform_fee_recipient: process.env.PLATFORM_FEE_RECIPIENT,
-        initial_withdrawal_window_period: 86400, // 1 day in seconds, adjust as needed
+        initial_withdrawal_window_period: 300, // 5 min for testnet
         admin: process.env.ADMIN_ADDRESS,
         operator: process.env.OPERATOR_ADDRESS
     });
@@ -50,10 +50,23 @@ async function main() {
     const liquidStakingContract = new Contract(liquidStakingAbi, deployResponse.contract_address, provider);
 
     const lstAddress = await liquidStakingContract.get_lst_address();
-    console.log("LST Address:", lstAddress);
+    console.log("LST Address:", lstAddress.toString(16));
 
     const delegatorAddresses = await liquidStakingContract.get_delegators_address();
-    console.log("Delegator Addresses:", delegatorAddresses);
+    console.log("Delegator Addresses:", delegatorAddresses.toString(16));
+
+    // 4. Save deployment info to .deployed file
+    const deploymentInfo = {
+        lstClassHash: lstClassHash,
+        liquidStakingClassHash: liquidStakingClassHash,
+        delegatorClassHash: delegatorClassHash,
+        stakeStarkProtocolAddress: deployResponse.contract_address,
+        lstAddress: lstAddress.toString(16),
+        delegatorAddresses: delegatorAddresses.toString(16)
+    };
+
+    fs.writeFileSync('.deployed', JSON.stringify(deploymentInfo, null, 2));
+    console.log("Deployment info saved to .deployed file");
 }
 
 async function declareContract(path) {
