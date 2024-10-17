@@ -9,7 +9,7 @@ use starknet::class_hash::class_hash_const;
 
 use stakestark_::interfaces::i_stake_stark::{
     IStakeStark, IStakeStarkDispatcher, IStakeStarkDispatcherTrait, IStakeStarkView,
-    IStakeStarkViewDispatcher, IStakeStarkViewDispatcherTrait, FeeStrategy
+    IStakeStarkViewDispatcher, IStakeStarkViewDispatcherTrait
 };
 use stakestark_::interfaces::i_stSTRK::{IstSTRK, IstSTRKDispatcher, IstSTRKDispatcherTrait};
 use openzeppelin::token::erc20::interface::{IERC20Dispatcher, IERC20DispatcherTrait};
@@ -48,9 +48,6 @@ fn test_initial_state() {
     let total_assets = IstSTRKDispatcher { contract_address: setup.lst_address }.total_assets();
     assert!(total_assets == 0, "Initial totalassets should be 0");
 
-    let fee_strategy = setup.stake_stark_view.get_fee_strategy();
-    assert!(fee_strategy == FeeStrategy::Flat(500), "Initial fee should be 5%");
-
     let platform_fee_recipient = setup.stake_stark_view.get_platform_fee_recipient();
     assert!(
         platform_fee_recipient == starknet::contract_address_const::<'fee_recipient'>(),
@@ -74,7 +71,7 @@ fn test_deposit() {
     setup.strk.approve(setup.stake_stark.contract_address, deposit_amount);
 
     cheat_caller_address(setup.stake_stark_contact, setup.user, CheatSpan::TargetCalls(1));
-    let shares = setup.stake_stark.deposit(deposit_amount);
+    let shares = setup.stake_stark.deposit(deposit_amount, setup.user);
 
     assert!(shares > 0, "Deposit should return shares");
     assert!(
@@ -98,7 +95,7 @@ fn test_deposit_less_than_minimum() {
     let small_deposit: u256 = 1_000_000_000_000_000; // 0.001 STRK
 
     cheat_caller_address(setup.stake_stark_contact, setup.user, CheatSpan::TargetCalls(1));
-    setup.stake_stark.deposit(small_deposit);
+    setup.stake_stark.deposit(small_deposit, setup.user);
 }
 
 #[test]
@@ -108,7 +105,7 @@ fn test_deposit_more_than_balance() {
     let large_deposit: u256 = setup.strk.balance_of(setup.user) + 1;
 
     cheat_caller_address(setup.stake_stark_contact, setup.user, CheatSpan::TargetCalls(1));
-    setup.stake_stark.deposit(large_deposit);
+    setup.stake_stark.deposit(large_deposit, setup.user);
 }
 
 #[test]
@@ -120,7 +117,7 @@ fn test_deposit_when_paused() {
     setup.stake_stark.pause();
 
     cheat_caller_address(setup.stake_stark_contact, setup.user, CheatSpan::TargetCalls(1));
-    setup.stake_stark.deposit(50_000_000_000_000_000_000);
+    setup.stake_stark.deposit(50_000_000_000_000_000_000, setup.user);
 }
 
 #[test]
@@ -172,6 +169,19 @@ fn test_request_withdrawal_zero_shares() {
 #[test]
 fn test_process_batch() {
     let setup = deploy_and_setup();
+
+    let deposit_amount: u256 = 100; // 100 STRK
+
+    cheat_caller_address(setup.strk_address, setup.user, CheatSpan::TargetCalls(1));
+    setup.strk.approve(setup.stake_stark.contract_address, 100000);
+
+    cheat_caller_address(setup.stake_stark_contact, setup.user, CheatSpan::TargetCalls(5));
+    setup.stake_stark.deposit(deposit_amount, setup.user);
+    setup.stake_stark.deposit(deposit_amount, setup.user);
+    setup.stake_stark.deposit(deposit_amount, setup.user);
+    setup.stake_stark.deposit(deposit_amount, setup.user);
+    setup.stake_stark.request_withdrawal(deposit_amount);
+
     let initial_pending_deposits = setup.stake_stark_view.get_pending_deposits();
     let initial_pending_withdrawals = setup.stake_stark_view.get_pending_withdrawals();
 
@@ -184,7 +194,8 @@ fn test_process_batch() {
     assert!(final_pending_deposits == 0, "Pending deposits not processed");
     assert!(final_pending_withdrawals == 0, "Pending withdraws not processed");
 
-    let total_delegated = setup.staking.get_total_stake();
+    let total_delegated = setup.pool.total_pool_amount();
+
     assert!(
         total_delegated == initial_pending_deposits.try_into().unwrap()
             - initial_pending_withdrawals.try_into().unwrap(),
@@ -261,59 +272,6 @@ fn test_withdraw_no_pending_requests() {
     stop_cheat_block_timestamp_global();
 }
 
-#[test]
-fn test_fee_strategy() {
-    let setup = deploy_and_setup();
-    let new_fee = FeeStrategy::Flat(300); // 3% fee
-
-    cheat_caller_address(setup.stake_stark_contact, setup.admin, CheatSpan::TargetCalls(1));
-    setup.stake_stark.set_fee_strategy(new_fee);
-
-    let current_fee = setup.stake_stark_view.get_fee_strategy();
-    assert!(current_fee == new_fee, "Fee strategy not updated");
-
-    // Test tiered fee strategy
-    let tiered_fee = FeeStrategy::Tiered(
-        (100, 200, 1000_000_000_000_000_000_000)
-    ); // 1%, 2%, 1000 STRK threshold
-    cheat_caller_address(setup.stake_stark_contact, setup.admin, CheatSpan::TargetCalls(1));
-    setup.stake_stark.set_fee_strategy(tiered_fee);
-
-    let current_fee = setup.stake_stark_view.get_fee_strategy();
-    assert!(current_fee == tiered_fee, "Tiered fee strategy not updated");
-}
-
-#[test]
-#[should_panic(expected: ('Flat fee too high',))]
-fn test_fee_strategy_too_high() {
-    let setup = deploy_and_setup();
-    let high_fee = FeeStrategy::Flat(1100); // 11% fee
-
-    cheat_caller_address(setup.stake_stark_contact, setup.admin, CheatSpan::TargetCalls(1));
-    setup.stake_stark.set_fee_strategy(high_fee);
-}
-
-#[test]
-#[should_panic(expected: ('Caller is not an admin',))]
-fn test_fee_strategy_non_admin() {
-    let setup = deploy_and_setup();
-    let new_fee = FeeStrategy::Flat(200); // 2% fee
-
-    cheat_caller_address(setup.stake_stark_contact, setup.user, CheatSpan::TargetCalls(1));
-    setup.stake_stark.set_fee_strategy(new_fee);
-}
-
-#[test]
-#[should_panic(expected: ('Invalid fee tiers',))]
-fn test_fee_strategy_invalid_tiered() {
-    let setup = deploy_and_setup();
-    let invalid_tiered_fee = FeeStrategy::Tiered(
-        (200, 100, 1000_000_000_000_000_000_000)
-    ); // Invalid: high fee < low fee
-
-    cheat_caller_address(setup.stake_stark_contact, setup.admin, CheatSpan::TargetCalls(1));
-    setup.stake_stark.set_fee_strategy(invalid_tiered_fee);
-}
 
 fn deploy_and_setup() -> TestSetup {
     // Deploy mock STRK token
@@ -330,7 +288,7 @@ fn deploy_and_setup() -> TestSetup {
 
     // Mint some STRK to the admin
     strk.mint(admin, stake_amount.into());
-    strk.mint(user, 100_000_000_000_000_000_000_000);
+    strk.mint(user, 10000);
 
     // Admin approves and stakes
     cheat_caller_address(strk_contract, admin, CheatSpan::TargetCalls(1));
@@ -352,7 +310,7 @@ fn deploy_and_setup() -> TestSetup {
     let lst_address = stake_stark_view.get_lst_address();
 
     // Mint some STRK to the user for testing
-    strk.mint(user, (stake_amount * 2).into());
+    //strk.mint(user, (stake_amount * 2).into());
     TestSetup {
         strk,
         strk_address: strk_contract,
@@ -409,16 +367,18 @@ fn deploy_stake_stark(
     let admin = starknet::contract_address_const::<'admin'>();
     let initial_platform_fee: u16 = 500; // 5%
     let platform_fee_recipient = starknet::contract_address_const::<'fee_recipient'>();
-    let initial_withdrawal_window_period: u64 = 86400;
+    let initial_withdrawal_window_period: u64 = 300;
 
     let mut calldata = ArrayTrait::new();
     strk_address.serialize(ref calldata);
     pool_contract.serialize(ref calldata);
     delegator.class_hash.serialize(ref calldata);
+    22.serialize(ref calldata);
     stSTRK.class_hash.serialize(ref calldata);
     initial_platform_fee.serialize(ref calldata);
     platform_fee_recipient.serialize(ref calldata);
     initial_withdrawal_window_period.serialize(ref calldata);
+    admin.serialize(ref calldata);
     admin.serialize(ref calldata);
 
     let (contract_address, _) = contract.deploy(@calldata).unwrap();

@@ -7,8 +7,7 @@ use starknet::testing::{set_caller_address, set_contract_address, set_block_time
 
 use stakestark_::interfaces::i_stake_stark::{
     IStakeStark, IStakeStarkDispatcher, IStakeStarkDispatcherTrait,
-    IStakeStarkView, IStakeStarkViewDispatcher, IStakeStarkViewDispatcherTrait,
-    FeeStrategy
+    IStakeStarkView, IStakeStarkViewDispatcher, IStakeStarkViewDispatcherTrait
 };
 use stakestark_::interfaces::i_stSTRK::{
     IstSTRK, IstSTRKDispatcher, IstSTRKDispatcherTrait
@@ -54,8 +53,6 @@ fn test_stake_stark_system() {
     println!("test_process_batch done");
     test_withdraw(setup);
     println!("test_withdraw done");
-    test_fee_strategy(setup);
-    println!("test_fee_strategy done");
 }
 
 fn deploy_and_setup() -> TestSetup {
@@ -123,7 +120,7 @@ fn test_deposit(setup: TestSetup) {
     setup.strk.approve(setup.stake_stark.contract_address, deposit_amount);
 
     cheat_caller_address(setup.stake_stark_contact, setup.user, CheatSpan::TargetCalls(1));
-    let shares = setup.stake_stark.deposit(deposit_amount);
+    let shares = setup.stake_stark.deposit(deposit_amount, setup.user);
 
     //assert(shares == IERC20Dispatcher{contract_address: setup.lst_address}.balance_of(setup.user),'share is not correct');
     assert(shares > 0, 'Deposit should return shares');
@@ -169,16 +166,6 @@ fn test_withdraw(setup: TestSetup) {
     let new_available_requests = setup.stake_stark_view.get_available_withdrawal_requests(setup.user);
     assert(new_available_requests.len() < available_requests.len(), 'Withdrawal not processed');
     stop_cheat_block_timestamp_global();
-}
-
-fn test_fee_strategy(setup: TestSetup) {
-    let new_fee = FeeStrategy::Flat(300); // 3% fee
-    
-    cheat_caller_address(setup.stake_stark_contact, setup.admin, CheatSpan::TargetCalls(1));
-    setup.stake_stark.set_fee_strategy(new_fee);
-
-    let current_fee = setup.stake_stark_view.get_fee_strategy();
-    assert(current_fee == new_fee, 'Fee strategy not updated');
 }
 
 fn test_lst_operations(setup: TestSetup) {

@@ -2,6 +2,7 @@ target/
 
 *.info
 .env*
+.deploy*
 
 .snfoundry_cache/
 .tool-versions

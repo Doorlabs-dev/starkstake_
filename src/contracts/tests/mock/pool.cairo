@@ -252,7 +252,7 @@ pub mod MockPool {
 
         fn claim_rewards(ref self: ContractState, pool_member: ContractAddress) -> u128 {
             let mut pool_member_info = self.get_pool_member_info(pool_member);
-            let rewards = 100_000_000_000_000_000_000; //100 STRK for reward
+            let rewards = 10; //10 STRK for reward
             pool_member_info.unclaimed_rewards = 0;
             self.pool_member_info.write(pool_member, Option::Some(pool_member_info));
 
