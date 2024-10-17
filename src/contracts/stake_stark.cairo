@@ -141,7 +141,7 @@ mod StakeStark {
         self.fee_ratio.write(initial_platform_fee);
         self.platform_fee_recipient.write(platform_fee_recipient);
         self.withdrawal_window_period.write(initial_withdrawal_window_period);
-        self.min_deposit_amount.write(100); // min deposit is 0.1 STRK
+        self.min_deposit_amount.write(10_000_000_000_000_000_000); // min deposit is 10 STRK
 
         self.access_control.initialize(admin);
         self.access_control.grant_role(OPERATOR_ROLE, operator);
@@ -408,7 +408,7 @@ mod StakeStark {
         fn _process_withdrawals(ref self: ContractState) -> (ContractAddress, u256) {
             let caller = get_tx_info().account_contract_address;
             let current_time = get_block_timestamp();
-            let mut total_assets_to_withdraw = 0_u256;
+            let mut total_assets_to_withdraw: u256 = 0;
 
             let requests = self.get_available_withdrawal_requests(caller);
 

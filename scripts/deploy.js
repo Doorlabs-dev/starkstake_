@@ -60,7 +60,7 @@ async function main() {
     }
 
     const contractAddresses = {
-        stakeStarkAddress: '0x' + deployResponse.contract_address,
+        stakeStarkAddress: deployResponse.contract_address,
         lstAddress: '0x' + BigInt(lstAddress).toString(16),
         delegatorAddresses: delegatorAddressesHex
     }
