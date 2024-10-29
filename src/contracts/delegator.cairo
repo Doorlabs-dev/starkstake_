@@ -133,9 +133,7 @@ mod Delegator {
 
             if !self.is_in_pool.read() {
                 // First time entering the pool
-                let success = pool
-                    .enter_delegation_pool(self.stake_stark.read(), amount_u128);
-                assert(success, 'Failed to enter delegation pool');
+                pool.enter_delegation_pool(self.stake_stark.read(), amount_u128);
                 self.is_in_pool.write(true);
             } else {
                 // Already in the pool, so add to existing delegation
