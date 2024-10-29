@@ -20,7 +20,7 @@ mod Delegator {
         i_starknet_staking::IPoolDispatcherTrait
     };
 
-    use stakestark_::utils::constants::{ADMIN_ROLE, LIQUID_STAKING_ROLE};
+    use stakestark_::utils::constants::{ADMIN_ROLE, LIQUID_STAKING_ROLE, PAUSER_ROLE};
 
     // Component declarations
     component!(path: AccessControlComponent, storage: oz_access_control, event: AccessControlEvent);
@@ -110,6 +110,7 @@ mod Delegator {
 
         self.access_control.grant_role(ADMIN_ROLE, stake_stark);
         self.access_control.grant_role(LIQUID_STAKING_ROLE, stake_stark);
+        self.access_control.grant_role(PAUSER_ROLE, stake_stark);
     }
 
     #[abi(embed_v0)]
@@ -219,6 +220,20 @@ mod Delegator {
 
             self.reentrancy_guard.end();
             rewards
+        }
+
+        // Pauses the contract.
+        /// Can only be called by an account with the PAUSER_ROLE.
+        fn pause(ref self: ContractState) {
+            self.access_control.assert_only_role(PAUSER_ROLE);
+            self.pausable.pause();
+        }
+
+        /// Unpauses the contract.
+        /// Can only be called by an account with the PAUSER_ROLE
+        fn unpause(ref self: ContractState) {
+            self.access_control.assert_only_role(PAUSER_ROLE);
+            self.pausable.unpause();
         }
 
         /// Upgrades the contract to a new implementation

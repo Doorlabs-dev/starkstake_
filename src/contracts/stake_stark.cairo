@@ -301,6 +301,60 @@ mod StakeStark {
             self.pausable.unpause();
         }
 
+        /// Pauses the contract.
+        /// Can only be called by an account with the PAUSER_ROLE.
+        fn pause_stSTRK(ref self: ContractState) {
+            self.access_control.assert_only_role(PAUSER_ROLE);
+            IstSTRKDispatcher{contract_address: self.get_lst_address()}.pause();
+        }
+
+        /// Unpauses the contract.
+        /// Can only be called by an account with the PAUSER_ROLE
+        fn unpause_stSTRK(ref self: ContractState) {
+            self.access_control.assert_only_role(PAUSER_ROLE);
+            IstSTRKDispatcher{contract_address: self.get_lst_address()}.unpause();
+        }        
+        
+        /// Pauses the contract.
+        /// Can only be called by an account with the PAUSER_ROLE.
+        fn pause_delegator(ref self: ContractState) {
+            self.access_control.assert_only_role(PAUSER_ROLE);
+            let mut i: u8 = 0;
+            while i < self.num_delegators.read() {
+                IDelegatorDispatcher { contract_address: self.delegators.read(i) }.pause();
+                i += 1;
+            };
+        }
+
+        /// Unpauses the contract.
+        /// Can only be called by an account with the PAUSER_ROLE
+        fn unpause_delegator(ref self: ContractState) {
+            self.access_control.assert_only_role(PAUSER_ROLE);
+            let mut i: u8 = 0;
+            while i < self.num_delegators.read() {
+                IDelegatorDispatcher { contract_address: self.delegators.read(i) }.unpause();
+                i += 1;
+            };
+        }
+
+        /// Pauses the contract.
+        /// Can only be called by an account with the PAUSER_ROLE.
+        fn pause_all(ref self: ContractState) {
+            self.access_control.assert_only_role(PAUSER_ROLE);
+            self.pause();
+            self.pause_stSTRK();
+            self.pause_delegator();
+        }
+
+        /// Unpauses the contract.
+        /// Can only be called by an account with the PAUSER_ROLE
+        fn unpause_all(ref self: ContractState) {
+            self.access_control.assert_only_role(PAUSER_ROLE);
+            self.unpause();
+            self.unpause_stSTRK();
+            self.unpause_delegator();
+        }
+
         /// Sets a new unavailability period for withdrawals.
         /// Can only be called by an account with the ADMIN_ROLE.
         ///
@@ -503,7 +557,7 @@ mod StakeStark {
         /// This function is called by `process_batch`.
         fn _delegator_withdraw(ref self: ContractState) {
             let now = get_block_timestamp();
-            // 델리게이터 상태 확인 및 출금 처리
+
             let mut i: u8 = 0;
             while i < self.num_delegators.read() {
                 let (is_available, available_time) = self.delegator_status.read(i);
@@ -527,7 +581,7 @@ mod StakeStark {
                     self
                         .emit(
                             Events::DelegatorStatusChanged {
-                                delegator: delegator_address, status: true, available_time: 0,
+                                delegator: delegator_address, status: true, available_time: now,
                             }
                         );
                 }

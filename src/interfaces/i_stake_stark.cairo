@@ -104,6 +104,12 @@ trait IStakeStark<TContractState> {
     fn set_platform_fee_recipient(ref self: TContractState, recipient: ContractAddress);
     fn pause(ref self: TContractState);
     fn unpause(ref self: TContractState);
+    fn pause_stSTRK(ref self: TContractState);
+    fn unpause_stSTRK(ref self: TContractState);
+    fn pause_delegator(ref self: TContractState);
+    fn unpause_delegator(ref self: TContractState);
+    fn pause_all(ref self: TContractState);
+    fn unpause_all(ref self: TContractState);
 
     fn set_unavailability_period(ref self: TContractState, new_period: u64);
 
