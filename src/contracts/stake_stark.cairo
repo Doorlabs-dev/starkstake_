@@ -153,18 +153,18 @@ mod StakeStark {
         ///
         /// # Arguments
         ///
-        /// * `amount` - The amount of STRK tokens to deposit
+        /// * `assets` - The amount of STRK tokens to deposit
         /// * `receiver` - Address that will receive the minted shares
         /// * `user` - Address of user who call deposit in stSTRK contract
         ///
         /// # Returns
         ///
         /// The number of LS tokens minted
-        fn deposit(ref self: ContractState, amount: u256, receiver: ContractAddress, user: ContractAddress) -> u256 {
+        fn deposit(ref self: ContractState, assets: u256, receiver: ContractAddress, user: ContractAddress) -> u256 {
             self.pausable.assert_not_paused();
             self.reentrancy_guard.start();
 
-            assert(amount >= self.min_deposit_amount.read(), 'Deposit amount too low');
+            assert(assets >= self.min_deposit_amount.read(), 'Deposit amount too low');
 
             let mut caller: ContractAddress = get_caller_address();
             //set user to caller when caller is stSTRK
@@ -177,22 +177,22 @@ mod StakeStark {
 
             // Transfer STRK tokens from caller to this contract
             assert(
-                strk_dispatcher.transfer_from(caller, get_contract_address(), amount),
+                strk_dispatcher.transfer_from(caller, get_contract_address(), assets),
                 'Transfer failed'
             );
 
             // Mint LS tokens to the user
             let shares = if receiver.is_zero() {
-                stSTRK.mint(amount, caller)
+                stSTRK.mint(stSTRK.preview_deposit(assets), caller)
             } else {
-                stSTRK.mint(amount, receiver)
+                stSTRK.mint(stSTRK.preview_deposit(assets), receiver)
             };
 
             assert(shares > 0, 'No shares minted');
 
-            self._add_deposit_to_queue(amount);
+            self._add_deposit_to_queue(assets);
 
-            self.emit(Events::Deposit { user: caller, amount, shares });
+            self.emit(Events::Deposit { user: caller, amount: assets, shares });
 
             self.reentrancy_guard.end();
             shares

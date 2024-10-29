@@ -95,7 +95,7 @@ mod Events {
 
 #[starknet::interface]
 trait IStakeStark<TContractState> {
-    fn deposit(ref self: TContractState, amount: u256, receiver: ContractAddress, user: ContractAddress) -> u256;
+    fn deposit(ref self: TContractState, assets: u256, receiver: ContractAddress, user: ContractAddress) -> u256;
     fn request_withdrawal(ref self: TContractState, shares: u256);
     fn withdraw(ref self: TContractState);
     fn process_batch(ref self: TContractState);

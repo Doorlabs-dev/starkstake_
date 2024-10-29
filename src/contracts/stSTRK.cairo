@@ -258,16 +258,16 @@ mod stSTRK {
         ///
         /// # Arguments
         ///
-        /// * `assets` - Amount of assets to mint shares for
+        /// * `shares` - Amount of shares to mint assets for
         ///
         /// # Returns
         ///
-        /// The amount of shares that would be minted
-        fn preview_mint(self: @ContractState, assets: u256) -> u256 {
+        /// The amount of assets that would be need to mint `share` amount
+        fn preview_mint(self: @ContractState, shares: u256) -> u256 {
             if self.erc20.total_supply() == 0 {
-                assets * INITIAL_SHARES_PER_ASSET
+                shares / INITIAL_SHARES_PER_ASSET
             } else {
-                (assets * self.erc20.total_supply() + self.total_assets() - 1) / self.total_assets()
+                (shares * self.total_assets()) / self.erc20.total_supply()
             }
         }
 
@@ -275,19 +275,18 @@ mod stSTRK {
         ///
         /// # Arguments
         ///
-        /// * `assets` - Amount of assets to mint shares for
+        /// * `shares` - Amount of shares to mint 
         /// * `receiver` - Address that will receive the minted shares
         ///
         /// # Returns
         ///
         /// The amount of shares minted
-        fn mint(ref self: ContractState, assets: u256, receiver: ContractAddress) -> u256 {
+        fn mint(ref self: ContractState, shares: u256, receiver: ContractAddress) -> u256 {
             self.access_control.assert_only_role(MINTER_ROLE);
             self.pausable.assert_not_paused();
-            //self.reentrancy_guard.start();
 
-            let shares = self.preview_mint(assets);
-            assert(shares != 0, 'ZERO_SHARES');
+            let assets = self.preview_mint(shares);
+            assert(assets != 0, 'ZERO_ASSETS');
 
             // Mint shares to receiver
             self.erc20.mint(receiver, shares);
@@ -302,7 +301,6 @@ mod stSTRK {
                     }
                 );
 
-            //self.reentrancy_guard.end();
             shares
         }
 
