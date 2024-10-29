@@ -5,7 +5,7 @@ struct WithdrawalRequest {
     withdrawal_time: u64,
 }
 
-mod Events{
+mod Events {
     use super::ContractAddress;
 
     #[derive(Drop, starknet::Event)]
@@ -91,12 +91,11 @@ mod Events{
         net_withdrawal_amount: u256,
         timestamp: u64,
     }
-
 }
 
 #[starknet::interface]
 trait IStakeStark<TContractState> {
-    fn deposit(ref self: TContractState, amount: u256, receiver: ContractAddress) -> u256;
+    fn deposit(ref self: TContractState, amount: u256, receiver: ContractAddress, user: ContractAddress) -> u256;
     fn request_withdrawal(ref self: TContractState, shares: u256);
     fn withdraw(ref self: TContractState);
     fn process_batch(ref self: TContractState);
@@ -113,7 +112,7 @@ trait IStakeStark<TContractState> {
     fn upgrade_lst(ref self: TContractState, new_class_hash: ClassHash);
 }
 
-#[starknet::interface] 
+#[starknet::interface]
 trait IStakeStarkView<TContractState> {
     fn get_lst_address(self: @TContractState) -> ContractAddress;
     fn get_delegators_address(self: @TContractState) -> Array<ContractAddress>;
@@ -123,9 +122,11 @@ trait IStakeStarkView<TContractState> {
     fn get_all_withdrawal_requests(
         self: @TContractState, user: ContractAddress
     ) -> Array<WithdrawalRequest>;
-    fn get_available_withdrawal_requests(self: @TContractState, user: ContractAddress) -> Array<(u32, WithdrawalRequest)>;
+    fn get_available_withdrawal_requests(
+        self: @TContractState, user: ContractAddress
+    ) -> Array<(u32, WithdrawalRequest)>;
     fn get_unavailability_period(self: @TContractState) -> u64;
     fn get_pending_deposits(self: @TContractState) -> u256;
-    fn get_pending_withdrawals(self: @TContractState) -> u256 ;
+    fn get_pending_withdrawals(self: @TContractState) -> u256;
     fn get_last_processing_time(self: @TContractState) -> u64;
 }

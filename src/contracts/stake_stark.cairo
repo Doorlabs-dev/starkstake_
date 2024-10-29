@@ -18,8 +18,7 @@ mod StakeStark {
     use stakestark_::components::access_control::RoleBasedAccessControlComponent;
 
     use stakestark_::interfaces::{
-        i_stake_stark::Events, i_stake_stark::IStakeStark,
-        i_stake_stark::IStakeStarkView,
+        i_stake_stark::Events, i_stake_stark::IStakeStark, i_stake_stark::IStakeStarkView,
         i_stake_stark::WithdrawalRequest, i_stSTRK::IstSTRKDispatcher,
         i_stSTRK::IstSTRKDispatcherTrait, i_delegator::IDelegatorDispatcher,
         i_delegator::IDelegatorDispatcherTrait,
@@ -86,7 +85,7 @@ mod StakeStark {
         access_control: RoleBasedAccessControlComponent::Storage,
     }
 
-    #[event] 
+    #[event]
     #[derive(Drop, starknet::Event)]
     enum Event {
         Deposit: Events::Deposit,
@@ -156,17 +155,23 @@ mod StakeStark {
         ///
         /// * `amount` - The amount of STRK tokens to deposit
         /// * `receiver` - Address that will receive the minted shares
+        /// * `user` - Address of user who call deposit in stSTRK contract
         ///
         /// # Returns
         ///
         /// The number of LS tokens minted
-        fn deposit(ref self: ContractState, amount: u256, receiver: ContractAddress) -> u256 {
+        fn deposit(ref self: ContractState, amount: u256, receiver: ContractAddress, user: ContractAddress) -> u256 {
             self.pausable.assert_not_paused();
             self.reentrancy_guard.start();
 
             assert(amount >= self.min_deposit_amount.read(), 'Deposit amount too low');
 
-            let caller = get_tx_info().account_contract_address;
+            let mut caller: ContractAddress = get_caller_address();
+            //set user to caller when caller is stSTRK
+            if caller == self.get_lst_address(){
+                caller = user
+            }
+
             let strk_dispatcher = IERC20Dispatcher { contract_address: self.strk_token.read() };
             let stSTRK = IstSTRKDispatcher { contract_address: self.stSTRK.read() };
 
@@ -327,7 +332,8 @@ mod StakeStark {
             self.delegator_class_hash.write(new_class_hash);
             let mut i: u8 = 0;
             while i < self.num_delegators.read() {
-                IDelegatorDispatcher { contract_address: self.delegators.read(i) }.upgrade(new_class_hash);
+                IDelegatorDispatcher { contract_address: self.delegators.read(i) }
+                    .upgrade(new_class_hash);
                 i += 1;
             };
         }
@@ -546,7 +552,9 @@ mod StakeStark {
             let mut i: u8 = 0;
             while i < self.num_delegators.read() {
                 if self._is_delegator_available(i) {
-                    let delegator =  IDelegatorDispatcher { contract_address: self.delegators.read(i) };
+                    let delegator = IDelegatorDispatcher {
+                        contract_address: self.delegators.read(i)
+                    };
                     let current_stake = delegator.get_total_stake();
 
                     if current_stake == 0 {
@@ -566,7 +574,9 @@ mod StakeStark {
             assert(found_available, 'No available delegators');
 
             // Delegate to the found delegator
-            let delegator =  IDelegatorDispatcher { contract_address: self.delegators.read(least_stake_index)};
+            let delegator = IDelegatorDispatcher {
+                contract_address: self.delegators.read(least_stake_index)
+            };
 
             // Transfer STRK directly to the delegator
             let strk_token = IERC20Dispatcher { contract_address: self.strk_token.read() };
@@ -592,7 +602,9 @@ mod StakeStark {
 
             while i < self.num_delegators.read() {
                 if self._is_delegator_available(i) {
-                    let delegator = IDelegatorDispatcher { contract_address: self.delegators.read(i) };
+                    let delegator = IDelegatorDispatcher {
+                        contract_address: self.delegators.read(i)
+                    };
 
                     let delegator_stake = delegator.get_total_stake();
 
@@ -615,7 +627,9 @@ mod StakeStark {
             while remaining_amount > 0 && i < self.num_delegators.read() {
                 let current_index = (best_fit_index + i) % self.num_delegators.read();
                 if self._is_delegator_available(current_index) {
-                    let delegator =IDelegatorDispatcher { contract_address: self.delegators.read(current_index) };
+                    let delegator = IDelegatorDispatcher {
+                        contract_address: self.delegators.read(current_index)
+                    };
                     let delegator_stake = delegator.get_total_stake();
 
                     if delegator_stake > 0 {
@@ -788,7 +802,7 @@ mod StakeStark {
         ///
         /// This function is called by `_distribute_rewards`.
         fn _calculate_fee(self: @ContractState, amount: u256) -> u256 {
-             amount * self.fee_ratio.read().into() / FEE_DENOMINATOR
+            amount * self.fee_ratio.read().into() / FEE_DENOMINATOR
         }
     }
 

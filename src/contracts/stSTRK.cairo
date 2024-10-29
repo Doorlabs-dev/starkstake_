@@ -18,8 +18,7 @@ mod stSTRK {
 
     use stakestark_::interfaces::{
         i_stSTRK::IstSTRK, i_stSTRK::Events, i_stake_stark::IStakeStarkDispatcher,
-        i_stake_stark::IStakeStarkDispatcherTrait,
-        i_stake_stark::IStakeStarkViewDispatcher,
+        i_stake_stark::IStakeStarkDispatcherTrait, i_stake_stark::IStakeStarkViewDispatcher,
         i_stake_stark::IStakeStarkViewDispatcherTrait
     };
 
@@ -227,10 +226,8 @@ mod stSTRK {
             let caller = get_caller_address();
 
             // Call deposit function of StakeStarkProtocol
-            let stake_stark = IStakeStarkDispatcher {
-                contract_address: self.stake_stark.read()
-            };
-            let minted_shares = stake_stark.deposit(assets, receiver);
+            let stake_stark = IStakeStarkDispatcher { contract_address: self.stake_stark.read() };
+            let minted_shares = stake_stark.deposit(assets, receiver, caller);
 
             assert(minted_shares == shares, 'Shares mismatch');
 
@@ -370,9 +367,7 @@ mod stSTRK {
             }
 
             // Call request_withdrawal function of StakeStarkProtocol
-            let stake_stark = IStakeStarkDispatcher {
-                contract_address: self.stake_stark.read()
-            };
+            let stake_stark = IStakeStarkDispatcher { contract_address: self.stake_stark.read() };
             stake_stark.request_withdrawal(shares);
 
             self.emit(Events::Withdraw { sender: caller, receiver, owner, assets, shares });
@@ -439,9 +434,7 @@ mod stSTRK {
             let assets = self.preview_redeem(shares);
 
             // Call request_withdrawal function of StakeStarkProtocol
-            let stake_stark = IStakeStarkDispatcher {
-                contract_address: self.stake_stark.read()
-            };
+            let stake_stark = IStakeStarkDispatcher { contract_address: self.stake_stark.read() };
             stake_stark.request_withdrawal(shares);
 
             self.emit(Events::Redeem { caller, receiver, owner, assets, shares });
