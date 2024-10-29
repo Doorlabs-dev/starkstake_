@@ -186,6 +186,11 @@ mod Delegator {
             let strk_token = IERC20Dispatcher { contract_address: self.strk_token.read() };
             strk_token.transfer(self.stake_stark.read(), withdrawn_amount);
 
+            //change the status if total stake is zero
+            if self.total_stake.read() == 0 {
+                self.is_in_pool.write(false);
+            }
+
             self.emit(Events::WithdrawalProcessed { amount: withdrawn_amount });
 
             self.reentrancy_guard.end();
