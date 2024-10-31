@@ -50,7 +50,6 @@ mod Delegator {
         pool_contract: ContractAddress,
         strk_token: ContractAddress,
         total_stake: u256,
-        last_reward_claim_time: u64,
         is_in_pool: bool,
         #[substorage(v0)]
         oz_access_control: AccessControlComponent::Storage,
@@ -106,7 +105,6 @@ mod Delegator {
         self.pool_contract.write(pool_contract);
         self.strk_token.write(strk_token);
         self.total_stake.write(0);
-        self.last_reward_claim_time.write(get_block_timestamp());
 
         self.access_control.grant_role(ADMIN_ROLE, stake_stark);
         self.access_control.grant_role(LIQUID_STAKING_ROLE, stake_stark);
@@ -214,9 +212,7 @@ mod Delegator {
             let pool = IPoolDispatcher { contract_address: self.pool_contract.read() };
             let rewards: u256 = pool.claim_rewards(get_contract_address()).into();
 
-            self.last_reward_claim_time.write(get_block_timestamp());
-
-            self.emit(Events::RewardsClaimed { amount: rewards });
+            self.emit(Events::RewardsClaimed { amount: rewards , processed_time: get_block_timestamp()});
 
             self.reentrancy_guard.end();
             rewards
@@ -253,15 +249,6 @@ mod Delegator {
         /// Total stake amount
         fn get_total_stake(self: @ContractState) -> u256 {
             self.total_stake.read()
-        }
-
-        /// Gets the last time rewards were claimed
-        ///
-        /// # Returns
-        ///
-        /// Timestamp of last reward claim
-        fn get_last_reward_claim_time(self: @ContractState) -> u64 {
-            self.last_reward_claim_time.read()
         }
     }
 }

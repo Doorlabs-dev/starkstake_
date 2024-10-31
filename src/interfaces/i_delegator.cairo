@@ -19,6 +19,7 @@ mod Events {
     #[derive(Drop, starknet::Event)]
     struct RewardsClaimed {
         amount: u256,
+        processed_time: u64,
     }
 }
 
@@ -32,5 +33,4 @@ trait IDelegator<TContractState> {
     fn unpause(ref self: TContractState);
     fn upgrade(ref self: TContractState, new_class_hash: ClassHash);
     fn get_total_stake(self: @TContractState) -> u256;
-    fn get_last_reward_claim_time(self: @TContractState) -> u64;
 }
