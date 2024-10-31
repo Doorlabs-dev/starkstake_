@@ -127,7 +127,6 @@ mod stSTRK {
         // Grant roles
         self.access_control.grant_role(UPGRADER_ROLE, stake_stark);
         self.access_control.grant_role(MINTER_ROLE, stake_stark);
-        self.access_control.grant_role(BURNER_ROLE, stake_stark);
         self.access_control.grant_role(PAUSER_ROLE, stake_stark);
     }
 
