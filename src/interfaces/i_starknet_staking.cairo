@@ -140,22 +140,27 @@ pub struct PoolContractInfo {
 pub trait IPool<TContractState> {
     fn enter_delegation_pool(
         ref self: TContractState, reward_address: ContractAddress, amount: u128
-    ) -> bool;
+    );
     fn add_to_delegation_pool(
         ref self: TContractState, pool_member: ContractAddress, amount: u128
     ) -> u128;
     fn exit_delegation_pool_intent(ref self: TContractState, amount: u128);
-    fn exit_delegation_pool_action(ref self: TContractState, pool_member: ContractAddress) -> u128;
+    fn exit_delegation_pool_action(
+        ref self: TContractState, pool_member: ContractAddress
+    ) -> u128;
     fn claim_rewards(ref self: TContractState, pool_member: ContractAddress) -> u128;
     fn switch_delegation_pool(
-        ref self: TContractState, to_staker: ContractAddress, to_pool: ContractAddress, amount: u128
+        ref self: TContractState,
+        to_staker: ContractAddress,
+        to_pool: ContractAddress,
+        amount: u128
     ) -> u128;
     fn enter_delegation_pool_from_staking_contract(
-        ref self: TContractState, amount: u128, index: u64, data: Span<felt252>
-    ) -> bool;
-    fn set_final_staker_index(ref self: TContractState, final_staker_index: u64);
-    fn change_reward_address(ref self: TContractState, reward_address: ContractAddress) -> bool;
+        ref self: TContractState, amount: u128, index: u128, data: Span<felt252>
+    );
+    fn set_final_staker_index(ref self: TContractState, final_staker_index: u128);
+    fn change_reward_address(ref self: TContractState, reward_address: ContractAddress);
     fn pool_member_info(self: @TContractState, pool_member: ContractAddress) -> PoolMemberInfo;
     fn contract_parameters(self: @TContractState) -> PoolContractInfo;
-    fn update_commission(ref self: TContractState, commission: u16) -> bool;
+    fn update_commission_from_staking_contract(ref self: TContractState, commission: u16);
 }
