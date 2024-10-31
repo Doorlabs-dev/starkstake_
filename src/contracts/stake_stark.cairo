@@ -248,8 +248,8 @@ mod StakeStark {
             self.access_control.assert_only_role(OPERATOR_ROLE);
             self.reentrancy_guard.start();
 
-            self._process_batch();
             self._delegator_withdraw();
+            self._process_batch();
 
             let total_rewards = self._collect_rewards_from_delegators();
 
@@ -1040,6 +1040,5 @@ mod StakeStark {
         fn get_pending_withdrawals(self: @ContractState) -> u256 {
             self.total_pending_withdrawals.read()
         }
-
     }
 }
