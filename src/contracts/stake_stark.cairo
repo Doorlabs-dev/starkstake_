@@ -70,7 +70,6 @@ mod StakeStark {
         withdrawal_window_period: u64,
         total_pending_deposits: u256,
         total_pending_withdrawals: u256,
-        last_processing_time: u64,
         #[substorage(v0)]
         oz_access_control: AccessControlComponent::Storage,
         #[substorage(v0)]
@@ -313,7 +312,7 @@ mod StakeStark {
         fn unpause_stSTRK(ref self: ContractState) {
             self.access_control.assert_only_role(PAUSER_ROLE);
             IstSTRKDispatcher{contract_address: self.get_lst_address()}.unpause();
-        }        
+        }
         
         /// Pauses the contract.
         /// Can only be called by an account with the PAUSER_ROLE.
@@ -542,7 +541,6 @@ mod StakeStark {
             // Reset pending amounts
             self.total_pending_deposits.write(0);
             self.total_pending_withdrawals.write(0);
-            self.last_processing_time.write(current_time);
 
             self
                 .emit(
@@ -648,26 +646,32 @@ mod StakeStark {
         /// This function is called by `_process_batch`.
         fn _request_withdrawal_from_available_delegator(ref self: ContractState, amount: u256) {
             let mut remaining_amount = amount;
-
+        
             // First pass: find the best fit delegator
             let mut i: u8 = 0;
             let mut best_fit_index: u8 = 0;
             let mut best_fit_amount: u256 = 0;
-
+            let mut largest_available_amount: u256 = 0;
+            let mut largest_amount_index: u8 = 0;
+        
             while i < self.num_delegators.read() {
                 if self._is_delegator_available(i) {
                     let delegator = IDelegatorDispatcher {
                         contract_address: self.delegators.read(i)
                     };
-
+        
                     let delegator_stake = delegator.get_total_stake();
-
+        
                     if delegator_stake > 0 {
-                        if delegator_stake >= remaining_amount
+                        // Track the largest stake in case we need to fall back to it
+                        if delegator_stake > largest_available_amount {
+                            largest_available_amount = delegator_stake;
+                            largest_amount_index = i;
+                        }
+        
+                        // Update best fit if this delegator can fulfill the request with less excess
+                        if delegator_stake >= remaining_amount 
                             && (best_fit_amount == 0 || delegator_stake < best_fit_amount) {
-                            best_fit_index = i;
-                            best_fit_amount = delegator_stake;
-                        } else if best_fit_amount == 0 {
                             best_fit_index = i;
                             best_fit_amount = delegator_stake;
                         }
@@ -675,7 +679,13 @@ mod StakeStark {
                 }
                 i += 1;
             };
-
+        
+            // If no exact fit was found, use the delegator with largest stake
+            if best_fit_amount == 0 {
+                best_fit_index = largest_amount_index;
+                best_fit_amount = largest_available_amount;
+            }
+        
             // Second pass: process withdrawal requests
             i = 0;
             while remaining_amount > 0 && i < self.num_delegators.read() {
@@ -685,34 +695,33 @@ mod StakeStark {
                         contract_address: self.delegators.read(current_index)
                     };
                     let delegator_stake = delegator.get_total_stake();
-
+        
                     if delegator_stake > 0 {
                         let withdrawal_amount = if delegator_stake <= remaining_amount {
                             delegator_stake
                         } else {
                             remaining_amount
                         };
-
+        
                         delegator.request_withdrawal(withdrawal_amount);
                         remaining_amount -= withdrawal_amount;
-
+        
                         // Update status after withdrawal request
                         let current_time = get_block_timestamp();
                         let unavailable_until = current_time + self.withdrawal_window_period.read();
                         self.delegator_status.write(current_index, (false, unavailable_until));
-                        self
-                            .emit(
-                                Events::DelegatorStatusChanged {
-                                    delegator: self.delegators.read(current_index),
-                                    status: false,
-                                    available_time: unavailable_until
-                                }
-                            );
+                        self.emit(
+                            Events::DelegatorStatusChanged {
+                                delegator: self.delegators.read(current_index),
+                                status: false,
+                                available_time: unavailable_until
+                            }
+                        );
                     }
                 }
                 i += 1;
             };
-
+        
             assert(remaining_amount == 0, 'Insufficient available funds');
         }
 
@@ -1032,13 +1041,5 @@ mod StakeStark {
             self.total_pending_withdrawals.read()
         }
 
-        /// Returns the total amount of pending withdrawals.
-        ///
-        /// # Returns
-        ///
-        /// The total pending withdrawals as a u256.
-        fn get_last_processing_time(self: @ContractState) -> u64 {
-            self.last_processing_time.read()
-        }
     }
 }
