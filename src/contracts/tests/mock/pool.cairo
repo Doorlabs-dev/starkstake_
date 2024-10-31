@@ -4,10 +4,10 @@ use starknet::ContractAddress;
 pub trait IMockPool<TContractState> {
     fn enter_delegation_pool(
         ref self: TContractState, reward_address: ContractAddress, amount: u128
-    ) -> bool;
+    );
     fn add_to_delegation_pool(
         ref self: TContractState, pool_member: ContractAddress, amount: u128
-    ) -> u128;
+    );
     fn exit_delegation_pool_intent(ref self: TContractState, amount: u128);
     fn exit_delegation_pool_action(ref self: TContractState, pool_member: ContractAddress) -> u128;
     fn claim_rewards(ref self: TContractState, pool_member: ContractAddress) -> u128;
@@ -141,7 +141,7 @@ pub mod MockPool {
     impl MockPoolImpl of super::IMockPool<ContractState> {
         fn enter_delegation_pool(
             ref self: ContractState, reward_address: ContractAddress, amount: u128
-        ) -> bool{
+        ) {
             let pool_member = get_caller_address();
             assert(self.pool_member_info.read(pool_member).is_none(), 'POOL_MEMBER_EXISTS');
             assert(amount > 0, 'AMOUNT_IS_ZERO');
@@ -178,12 +178,11 @@ pub mod MockPool {
                     }
                 );
 
-            true
         }
 
         fn add_to_delegation_pool(
             ref self: ContractState, pool_member: ContractAddress, amount: u128
-        ) -> u128 {
+        ) {
             let mut pool_member_info = self.get_pool_member_info(pool_member);
             pool_member_info.amount += amount;
             self.pool_member_info.write(pool_member, Option::Some(pool_member_info));
@@ -202,7 +201,6 @@ pub mod MockPool {
                     }
                 );
 
-            pool_member_info.amount
         }
 
         fn exit_delegation_pool_intent(ref self: ContractState, amount: u128) {
@@ -255,7 +253,6 @@ pub mod MockPool {
             let rewards = 10; //10 STRK for reward
             pool_member_info.unclaimed_rewards = 0;
             self.pool_member_info.write(pool_member, Option::Some(pool_member_info));
-
 
             // Transfer STRK tokens back to pool member
             let strk_token = self.strk_token.read();

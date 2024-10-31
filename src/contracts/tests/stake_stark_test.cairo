@@ -1,20 +1,29 @@
 use core::array::ArrayTrait;
 use core::result::ResultTrait;
-use starknet::{ContractAddress, ClassHash, get_caller_address, get_block_timestamp, SyscallResultTrait};
-use snforge_std::{declare, ContractClassTrait, DeclareResultTrait, ContractClass, cheat_caller_address, CheatSpan, start_cheat_block_timestamp_global ,stop_cheat_block_timestamp_global, cheat_account_contract_address, start_cheat_caller_address_global,stop_cheat_caller_address_global};
+use starknet::{
+    ContractAddress, ClassHash, get_caller_address, get_block_timestamp, SyscallResultTrait
+};
+use snforge_std::{
+    declare, ContractClassTrait, DeclareResultTrait, ContractClass, cheat_caller_address, CheatSpan,
+    start_cheat_block_timestamp_global, stop_cheat_block_timestamp_global,
+    cheat_account_contract_address, start_cheat_caller_address_global,
+    stop_cheat_caller_address_global
+};
 use starknet::class_hash::class_hash_const;
 use starknet::testing::{set_caller_address, set_contract_address, set_block_timestamp};
 
 use stakestark_::interfaces::i_stake_stark::{
-    IStakeStark, IStakeStarkDispatcher, IStakeStarkDispatcherTrait,
-    IStakeStarkView, IStakeStarkViewDispatcher, IStakeStarkViewDispatcherTrait
+    IStakeStark, IStakeStarkDispatcher, IStakeStarkDispatcherTrait, IStakeStarkView,
+    IStakeStarkViewDispatcher, IStakeStarkViewDispatcherTrait
 };
-use stakestark_::interfaces::i_stSTRK::{
-    IstSTRK, IstSTRKDispatcher, IstSTRKDispatcherTrait
-};
+use stakestark_::interfaces::i_stSTRK::{IstSTRK, IstSTRKDispatcher, IstSTRKDispatcherTrait};
 use openzeppelin::token::erc20::interface::{IERC20Dispatcher, IERC20DispatcherTrait};
-use stakestark_::contracts::tests::mock::staking::{IMockStaking, IMockStakingDispatcher, IMockStakingDispatcherTrait};
-use stakestark_::contracts::tests::mock::pool::{IMockPool, IMockPoolDispatcher, IMockPoolDispatcherTrait};
+use stakestark_::contracts::tests::mock::staking::{
+    IMockStaking, IMockStakingDispatcher, IMockStakingDispatcherTrait
+};
+use stakestark_::contracts::tests::mock::pool::{
+    IMockPool, IMockPoolDispatcher, IMockPoolDispatcherTrait
+};
 use stakestark_::contracts::tests::mock::strk::{ISTRK, ISTRKDispatcher, ISTRKDispatcherTrait};
 
 // Constants
@@ -40,7 +49,7 @@ struct TestSetup {
 #[test]
 fn test_stake_stark_system() {
     let setup = deploy_and_setup();
-    
+
     check_deployments(setup);
     println!("check_deployments done");
     test_lst_operations(setup);
@@ -71,7 +80,7 @@ fn deploy_and_setup() -> TestSetup {
     // Mint some STRK to the admin
     strk.mint(admin, stake_amount.into());
     strk.mint(user, 100_000_000_000_000_000_000_000);
-    
+
     // Admin approves and stakes
     cheat_caller_address(strk_contract, admin, CheatSpan::TargetCalls(1));
     strk.approve(staking_contract, stake_amount.into());
@@ -86,7 +95,9 @@ fn deploy_and_setup() -> TestSetup {
     let pool = IMockPoolDispatcher { contract_address: pool_contract };
 
     // Deploy liquid staking contract
-    let (stake_stark_contact, stake_stark, stake_stark_view) = deploy_stake_stark(strk_contract, pool_contract);
+    let (stake_stark_contact, stake_stark, stake_stark_view) = deploy_stake_stark(
+        strk_contract, pool_contract
+    );
     let lst_address = stake_stark_view.get_lst_address();
 
     // Mint some STRK to the user for testing
@@ -120,11 +131,12 @@ fn test_deposit(setup: TestSetup) {
     setup.strk.approve(setup.stake_stark.contract_address, deposit_amount);
 
     cheat_caller_address(setup.stake_stark_contact, setup.user, CheatSpan::TargetCalls(1));
-    let shares = setup.stake_stark.deposit(deposit_amount, setup.user);
+    let shares = setup.stake_stark.deposit(deposit_amount, setup.user, setup.user);
 
-    //assert(shares == IERC20Dispatcher{contract_address: setup.lst_address}.balance_of(setup.user),'share is not correct');
+    //assert(shares == IERC20Dispatcher{contract_address:
+    //setup.lst_address}.balance_of(setup.user),'share is not correct');
     assert(shares > 0, 'Deposit should return shares');
-    
+
     let pending_deposits = setup.stake_stark_view.get_pending_deposits();
     assert(pending_deposits == deposit_amount, 'Incorrect pending deposits');
 }
@@ -148,7 +160,7 @@ fn test_process_batch(setup: TestSetup) {
 
     let pending_deposits = setup.stake_stark_view.get_pending_deposits();
     let pending_withdrawals = setup.stake_stark_view.get_pending_withdrawals();
-    
+
     assert(pending_deposits == 0, 'Pending deposits not processed');
     assert(pending_withdrawals == 0, 'Pending withdraw not processed');
 }
@@ -156,14 +168,16 @@ fn test_process_batch(setup: TestSetup) {
 fn test_withdraw(setup: TestSetup) {
     // Advance time to make withdrawal requests available
     start_cheat_block_timestamp_global(get_block_timestamp() + EXIT_WAIT_WINDOW + 1);
-    
+
     let available_requests = setup.stake_stark_view.get_available_withdrawal_requests(setup.user);
     assert(available_requests.len() > 0, 'No available withdrawals');
 
     cheat_caller_address(setup.stake_stark_contact, setup.user, CheatSpan::TargetCalls(1));
     setup.stake_stark.withdraw();
 
-    let new_available_requests = setup.stake_stark_view.get_available_withdrawal_requests(setup.user);
+    let new_available_requests = setup
+        .stake_stark_view
+        .get_available_withdrawal_requests(setup.user);
     assert(new_available_requests.len() < available_requests.len(), 'Withdrawal not processed');
     stop_cheat_block_timestamp_global();
 }
@@ -223,7 +237,7 @@ fn deploy_mock_strk() -> ContractAddress {
     let mut calldata = ArrayTrait::new();
     let name: felt252 = 'Starknet Token';
     let symbol: felt252 = 'STRK';
-    
+
     calldata.append(name);
     calldata.append(symbol);
     INITIAL_SUPPLY.serialize(ref calldata);
@@ -238,7 +252,7 @@ fn deploy_mock_staking(strk_address: ContractAddress) -> (ContractAddress, IMock
     let contract = declare("MockStaking").unwrap().contract_class();
     let pool = declare("MockPool").unwrap().contract_class();
     let mut calldata = ArrayTrait::new();
-    
+
     MIN_STAKE.serialize(ref calldata);
     EXIT_WAIT_WINDOW.serialize(ref calldata);
     pool.class_hash.serialize(ref calldata); // Dummy class hash for pool contract
@@ -249,7 +263,9 @@ fn deploy_mock_staking(strk_address: ContractAddress) -> (ContractAddress, IMock
 }
 
 // Helper function to deploy liquid staking contract
-fn deploy_stake_stark(strk_address: ContractAddress, pool_contract: ContractAddress) -> (ContractAddress, IStakeStarkDispatcher, IStakeStarkViewDispatcher) {
+fn deploy_stake_stark(
+    strk_address: ContractAddress, pool_contract: ContractAddress
+) -> (ContractAddress, IStakeStarkDispatcher, IStakeStarkViewDispatcher) {
     let contract = declare("StakeStark").unwrap().contract_class();
     let delegator = declare("Delegator").unwrap().contract_class();
     let stSTRK = declare("stSTRK").unwrap().contract_class();

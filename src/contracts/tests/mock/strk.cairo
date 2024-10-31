@@ -9,7 +9,9 @@ pub trait ISTRK<TContractState> {
     fn balance_of(self: @TContractState, account: ContractAddress) -> u256;
     fn allowance(self: @TContractState, owner: ContractAddress, spender: ContractAddress) -> u256;
     fn transfer(ref self: TContractState, recipient: ContractAddress, amount: u256) -> bool;
-    fn transfer_from(ref self: TContractState, sender: ContractAddress, recipient: ContractAddress, amount: u256) -> bool;
+    fn transfer_from(
+        ref self: TContractState, sender: ContractAddress, recipient: ContractAddress, amount: u256
+    ) -> bool;
     fn approve(ref self: TContractState, spender: ContractAddress, amount: u256) -> bool;
     fn mint(ref self: TContractState, recipient: ContractAddress, amount: u256);
 }
@@ -65,7 +67,9 @@ mod MockSTRK {
             self._balances.read(account)
         }
 
-        fn allowance(self: @ContractState, owner: ContractAddress, spender: ContractAddress) -> u256 {
+        fn allowance(
+            self: @ContractState, owner: ContractAddress, spender: ContractAddress
+        ) -> u256 {
             self._allowances.read((owner, spender))
         }
 
@@ -119,10 +123,7 @@ mod MockSTRK {
         }
 
         fn _approve(
-            ref self: ContractState,
-            owner: ContractAddress,
-            spender: ContractAddress,
-            amount: u256
+            ref self: ContractState, owner: ContractAddress, spender: ContractAddress, amount: u256
         ) {
             assert(!owner.is_zero(), 'ERC20: approve from 0');
             assert(!spender.is_zero(), 'ERC20: approve to 0');
@@ -130,16 +131,12 @@ mod MockSTRK {
         }
 
         fn _spend_allowance(
-            ref self: ContractState,
-            owner: ContractAddress,
-            spender: ContractAddress,
-            amount: u256
+            ref self: ContractState, owner: ContractAddress, spender: ContractAddress, amount: u256
         ) {
             let current_allowance = self._allowances.read((owner, spender));
             if current_allowance != 0xffffffffffffffffffffffffffffffff_u256 {
                 self._approve(owner, spender, current_allowance - amount);
             }
         }
-
     }
 }

@@ -229,9 +229,7 @@ fn test_withdraw() {
     start_cheat_block_timestamp_global(get_block_timestamp() + EXIT_WAIT_WINDOW + 1);
 
     let initial_strk_balance = setup.strk.balance_of(setup.user);
-    let available_requests = setup
-        .stake_stark_view
-        .get_available_withdrawal_requests(setup.user);
+    let available_requests = setup.stake_stark_view.get_available_withdrawal_requests(setup.user);
     assert!(available_requests.len() > 0, "No available withdrawals");
 
     cheat_caller_address(setup.stake_stark_contact, setup.user, CheatSpan::TargetCalls(1));
@@ -243,9 +241,7 @@ fn test_withdraw() {
     assert!(new_available_requests.len() < available_requests.len(), "Withdrawal not processed");
 
     let final_strk_balance = setup.strk.balance_of(setup.user);
-    assert!(
-        final_strk_balance > initial_strk_balance, "STRK not increased after withd"
-    );
+    assert!(final_strk_balance > initial_strk_balance, "STRK not increased after withd");
 
     stop_cheat_block_timestamp_global();
 }

@@ -54,7 +54,7 @@ pub trait IMockStaking<TContractState> {
     fn set_global_index(ref self: TContractState, index: u64);
     fn set_min_stake(ref self: TContractState, min_stake: u128);
 
-    fn set_pool_contract_class_hash(ref self: TContractState, class_hash: ClassHash) ;
+    fn set_pool_contract_class_hash(ref self: TContractState, class_hash: ClassHash);
     fn get_deployed_pool(self: @TContractState, staker_address: ContractAddress) -> ContractAddress;
 }
 
@@ -365,20 +365,22 @@ pub mod MockStaking {
         fn set_paused(ref self: ContractState, paused: bool) {
             self.is_paused.write(paused);
         }
-    
+
         fn set_global_index(ref self: ContractState, index: u64) {
             self.global_index.write(index);
         }
-    
+
         fn set_min_stake(ref self: ContractState, min_stake: u128) {
             self.min_stake.write(min_stake);
         }
-    
+
         fn set_pool_contract_class_hash(ref self: ContractState, class_hash: ClassHash) {
             self.pool_contract_class_hash.write(class_hash);
         }
-    
-        fn get_deployed_pool(self: @ContractState, staker_address: ContractAddress) -> ContractAddress {
+
+        fn get_deployed_pool(
+            self: @ContractState, staker_address: ContractAddress
+        ) -> ContractAddress {
             self.deployed_pools.read(staker_address)
         }
     }
@@ -414,6 +416,5 @@ pub mod MockStaking {
             deployed_address
         }
     }
-
 }
 
