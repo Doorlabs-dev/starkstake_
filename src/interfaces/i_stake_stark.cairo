@@ -134,5 +134,4 @@ trait IStakeStarkView<TContractState> {
     fn get_unavailability_period(self: @TContractState) -> u64;
     fn get_pending_deposits(self: @TContractState) -> u256;
     fn get_pending_withdrawals(self: @TContractState) -> u256;
-    fn get_last_processing_time(self: @TContractState) -> u64;
 }
