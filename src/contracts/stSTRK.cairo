@@ -127,6 +127,7 @@ mod stSTRK {
         // Grant roles
         self.access_control.grant_role(UPGRADER_ROLE, stake_stark);
         self.access_control.grant_role(MINTER_ROLE, stake_stark);
+        self.access_control.grant_role(BURNER_ROLE, stake_stark);
         self.access_control.grant_role(PAUSER_ROLE, stake_stark);
     }
 
@@ -461,7 +462,7 @@ mod stSTRK {
         /// * `share` - Amount of shares to burn
         /// * `caller` - Address from which to burn shares
         fn burn(ref self: ContractState, share: u256, caller: ContractAddress) {
-            self.access_control.assert_only_role(MINTER_ROLE);
+            self.access_control.assert_only_role(BURNER_ROLE);
             let assets_to_burn = self.convert_to_assets(share);
             self.erc20.burn(caller, share);
             self.total_assets.write(self.total_assets.read() - assets_to_burn);
