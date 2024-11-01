@@ -1,22 +1,5 @@
 use starknet::ContractAddress;
 
-#[starknet::interface]
-pub trait IMockPool<TContractState> {
-    fn enter_delegation_pool(
-        ref self: TContractState, reward_address: ContractAddress, amount: u128
-    );
-    fn add_to_delegation_pool(
-        ref self: TContractState, pool_member: ContractAddress, amount: u128
-    );
-    fn exit_delegation_pool_intent(ref self: TContractState, amount: u128);
-    fn exit_delegation_pool_action(ref self: TContractState, pool_member: ContractAddress) -> u128;
-    fn claim_rewards(ref self: TContractState, pool_member: ContractAddress) -> u128;
-    fn pool_member_info(self: @TContractState, pool_member: ContractAddress) -> PoolMemberInfo;
-    fn contract_parameters(self: @TContractState) -> PoolContractInfo;
-    fn set_final_staker_index(ref self: TContractState, final_staker_index: u64);
-    fn total_pool_amount(self: @TContractState) -> u128;
-}
-
 #[derive(Copy, Drop, Serde, starknet::Store)]
 pub struct PoolMemberInfo {
     pub reward_address: ContractAddress,
@@ -37,17 +20,54 @@ pub struct PoolContractInfo {
     pub commission: u16,
 }
 
+#[starknet::interface]
+pub trait IMockPool<TContractState> {
+    // Core delegation functions
+    fn enter_delegation_pool(
+        ref self: TContractState,
+        reward_address: ContractAddress,
+        amount: u128
+    ) -> ContractAddress;
+    
+    fn add_to_delegation_pool(
+        ref self: TContractState,
+        pool_member: ContractAddress,
+        amount: u128
+    ) -> u128;
+    
+    fn exit_delegation_pool_intent(ref self: TContractState, amount: u128);
+    
+    fn exit_delegation_pool_action(
+        ref self: TContractState,
+        pool_member: ContractAddress
+    ) -> u128;
+    
+    fn claim_rewards(ref self: TContractState, pool_member: ContractAddress) -> u128;
+
+    // Switch pool functions
+    fn switch_delegation_pool(
+        ref self: TContractState,
+        to_staker: ContractAddress,
+        to_pool: ContractAddress,
+        amount: u128
+    ) -> u128;
+
+    // View functions    
+    fn pool_member_info(self: @TContractState, pool_member: ContractAddress) -> PoolMemberInfo;
+    fn contract_parameters(self: @TContractState) -> PoolContractInfo;
+    fn set_final_staker_index(ref self: TContractState, final_staker_index: u64);
+}
+
 #[starknet::contract]
 pub mod MockPool {
     use core::option::OptionTrait;
-    use core::num::traits::zero::Zero;
+    //use core::num::traits::zero::Zero;
     use starknet::storage::Map;
     use starknet::{
-        ContractAddress, ClassHash, get_caller_address, get_block_timestamp, get_contract_address,
-        SyscallResultTrait, syscalls::deploy_syscall, get_tx_info
+        ContractAddress, get_caller_address, get_block_timestamp, get_contract_address
     };
-    use super::{PoolMemberInfo, PoolContractInfo};
     use stakestark_::contracts::tests::mock::strk::{ISTRKDispatcher, ISTRKDispatcherTrait};
+    use super::{PoolMemberInfo, PoolContractInfo};
 
     #[storage]
     struct Storage {
@@ -140,85 +160,96 @@ pub mod MockPool {
     #[abi(embed_v0)]
     impl MockPoolImpl of super::IMockPool<ContractState> {
         fn enter_delegation_pool(
-            ref self: ContractState, reward_address: ContractAddress, amount: u128
-        ) {
+            ref self: ContractState,
+            reward_address: ContractAddress,
+            amount: u128
+        ) -> ContractAddress {
             let pool_member = get_caller_address();
             assert(self.pool_member_info.read(pool_member).is_none(), 'POOL_MEMBER_EXISTS');
             assert(amount > 0, 'AMOUNT_IS_ZERO');
 
-            // Transfer STRK tokens from pool member to this contract
+            // Transfer tokens
             let strk_token = self.strk_token.read();
-            strk_token.transfer_from(get_caller_address(), get_contract_address(), amount.into());
+            strk_token.transfer_from(pool_member, get_contract_address(), amount.into());
 
-            self
-                .pool_member_info
-                .write(
-                    pool_member,
-                    Option::Some(
-                        PoolMemberInfo {
-                            reward_address,
-                            amount,
-                            index: 0,
-                            unclaimed_rewards: 0,
-                            commission: self.commission.read(),
-                            unpool_time: Option::None,
-                            unpool_amount: 0,
-                        }
-                    )
-                );
+            // Initialize pool member
+            self.pool_member_info.write(
+                pool_member,
+                Option::Some(
+                    PoolMemberInfo {
+                        reward_address,
+                        amount,
+                        index: 0,
+                        unclaimed_rewards: 0,
+                        commission: self.commission.read(),
+                        unpool_time: Option::None,
+                        unpool_amount: 0,
+                    }
+                )
+            );
             self.total_pool_amount.write(self.total_pool_amount.read() + amount);
 
-            self
-                .emit(
-                    NewPoolMember {
-                        pool_member,
-                        staker_address: self.staker_address.read(),
-                        reward_address,
-                        amount
-                    }
-                );
+            self.emit(NewPoolMember {
+                pool_member,
+                staker_address: self.staker_address.read(),
+                reward_address,
+                amount
+            });
 
+            get_contract_address()
         }
 
         fn add_to_delegation_pool(
-            ref self: ContractState, pool_member: ContractAddress, amount: u128
-        ) {
+            ref self: ContractState,
+            pool_member: ContractAddress,
+            amount: u128
+        ) -> u128 {
             let mut pool_member_info = self.get_pool_member_info(pool_member);
+            let old_amount = pool_member_info.amount;
+
+            // Transfer tokens
+            let strk_token = self.strk_token.read();
+            strk_token.transfer_from(get_caller_address(), get_contract_address(), amount.into());
+
             pool_member_info.amount += amount;
             self.pool_member_info.write(pool_member, Option::Some(pool_member_info));
             self.total_pool_amount.write(self.total_pool_amount.read() + amount);
 
-            // Transfer STRK tokens from pool member to this contract
-            let strk_token = self.strk_token.read();
-            strk_token.transfer_from(get_caller_address(), get_contract_address(), amount.into());
+            self.emit(DelegationPoolMemberBalanceChanged {
+                pool_member,
+                old_delegated_stake: old_amount,
+                new_delegated_stake: pool_member_info.amount
+            });
 
-            self
-                .emit(
-                    DelegationPoolMemberBalanceChanged {
-                        pool_member,
-                        old_delegated_stake: pool_member_info.amount - amount,
-                        new_delegated_stake: pool_member_info.amount
-                    }
-                );
-
+            pool_member_info.amount
         }
 
         fn exit_delegation_pool_intent(ref self: ContractState, amount: u128) {
             let pool_member = get_caller_address();
             let mut pool_member_info = self.get_pool_member_info(pool_member);
-            assert(amount <= pool_member_info.amount, 'AMOUNT_TOO_HIGH');
+            assert(amount <= pool_member_info.amount + pool_member_info.unpool_amount, 'AMOUNT_TOO_HIGH');
 
             let unpool_time = get_block_timestamp() + 86400; // 1 day delay
-            pool_member_info.unpool_time = Option::Some(unpool_time);
+            if amount.is_zero() {
+                pool_member_info.unpool_time = Option::None;
+            } else {
+                pool_member_info.unpool_time = Option::Some(unpool_time);
+            }
+            
             pool_member_info.unpool_amount = amount;
-            pool_member_info.amount -= amount;
+            pool_member_info.amount = pool_member_info.amount + pool_member_info.unpool_amount - amount;
             self.pool_member_info.write(pool_member, Option::Some(pool_member_info));
 
-            self.emit(PoolMemberExitIntent { pool_member, exit_timestamp: unpool_time, amount });
+            self.emit(PoolMemberExitIntent {
+                pool_member,
+                exit_timestamp: unpool_time,
+                amount
+            });
         }
 
         fn exit_delegation_pool_action(
-            ref self: ContractState, pool_member: ContractAddress
+            ref self: ContractState,
+            pool_member: ContractAddress
         ) -> u128 {
             let mut pool_member_info = self.get_pool_member_info(pool_member);
             let unpool_time = pool_member_info.unpool_time.expect('MISSING_UNDELEGATE_INTENT');
@@ -228,18 +259,16 @@ pub mod MockPool {
             pool_member_info.unpool_amount = 0;
             pool_member_info.unpool_time = Option::None;
 
-            // Transfer STRK tokens back to pool member
+            // Transfer tokens back
             let strk_token = self.strk_token.read();
             strk_token.transfer(pool_member, amount.into());
 
-            if pool_member_info.amount == 0 {
+            if pool_member_info.amount.is_zero() {
                 self.pool_member_info.write(pool_member, Option::None);
-                self
-                    .emit(
-                        DeletePoolMember {
-                            pool_member, reward_address: pool_member_info.reward_address
-                        }
-                    );
+                self.emit(DeletePoolMember {
+                    pool_member,
+                    reward_address: pool_member_info.reward_address
+                });
             } else {
                 self.pool_member_info.write(pool_member, Option::Some(pool_member_info));
             }
@@ -250,25 +279,59 @@ pub mod MockPool {
 
         fn claim_rewards(ref self: ContractState, pool_member: ContractAddress) -> u128 {
             let mut pool_member_info = self.get_pool_member_info(pool_member);
-            let rewards = 10; //10 STRK for reward
+            let caller = get_caller_address();
+            assert(
+                caller == pool_member || caller == pool_member_info.reward_address,
+                'UNAUTHORIZED'
+            );
+            
+            let rewards = pool_member_info.unclaimed_rewards;
             pool_member_info.unclaimed_rewards = 0;
             self.pool_member_info.write(pool_member, Option::Some(pool_member_info));
 
-            // Transfer STRK tokens back to pool member
-            let strk_token = self.strk_token.read();
-            strk_token.transfer(pool_member, rewards.into());
+            // set rewards as 10 STRK for testing
+            //let rewards: u128 = 10_000_000_000_000_000_000;
+            if rewards > 0 {
+                let strk_token = self.strk_token.read();
+                strk_token.transfer(pool_member_info.reward_address, rewards.into());
 
-            self
-                .emit(
-                    PoolMemberRewardClaimed {
-                        pool_member,
-                        reward_address: pool_member_info.reward_address,
-                        amount: rewards
-                    }
-                );
+                self.emit(PoolMemberRewardClaimed {
+                    pool_member,
+                    reward_address: pool_member_info.reward_address,
+                    amount: rewards
+                });
+            }
+
             rewards
         }
 
+        // New functions for pool switching
+        fn switch_delegation_pool(
+            ref self: ContractState,
+            to_staker: ContractAddress,
+            to_pool: ContractAddress,
+            amount: u128
+        ) -> u128 {
+            let pool_member = get_caller_address();
+            let mut pool_member_info = self.get_pool_member_info(pool_member);
+            
+            assert(pool_member_info.unpool_time.is_some(), 'NO_UNDELEGATE_INTENT');
+            assert(pool_member_info.unpool_amount >= amount, 'AMOUNT_TOO_HIGH');
+
+            pool_member_info.unpool_amount -= amount;
+            if pool_member_info.unpool_amount.is_zero() && pool_member_info.amount.is_zero() {
+                self.pool_member_info.write(pool_member, Option::None);
+            } else {
+                if pool_member_info.unpool_amount.is_zero() {
+                    pool_member_info.unpool_time = Option::None;
+                }
+                self.pool_member_info.write(pool_member, Option::Some(pool_member_info));
+            }
+
+            amount
+        }
+
+        // View functions remain unchanged
         fn pool_member_info(self: @ContractState, pool_member: ContractAddress) -> PoolMemberInfo {
             self.get_pool_member_info(pool_member)
         }
@@ -284,39 +347,25 @@ pub mod MockPool {
         }
 
         fn set_final_staker_index(ref self: ContractState, final_staker_index: u64) {
-            assert(self.final_staker_index.read().is_none(), 'FINAL_STAKER_INDEX_ALREADY_SET');
+            assert(
+                self.final_staker_index.read().is_none(), 
+                'FINAL_STAKER_INDEX_ALREADY_SET'
+            );
             self.final_staker_index.write(Option::Some(final_staker_index));
-            self
-                .emit(
-                    FinalIndexSet { staker_address: self.staker_address.read(), final_staker_index }
-                );
-        }
-
-        fn total_pool_amount(self: @ContractState) -> u128 {
-            self.total_pool_amount.read()
+            self.emit(FinalIndexSet {
+                staker_address: self.staker_address.read(),
+                final_staker_index
+            });
         }
     }
 
     #[generate_trait]
     impl InternalFunctions of InternalFunctionsTrait {
         fn get_pool_member_info(
-            self: @ContractState, pool_member: ContractAddress
+            self: @ContractState,
+            pool_member: ContractAddress
         ) -> PoolMemberInfo {
             self.pool_member_info.read(pool_member).expect('POOL_MEMBER_DOES_NOT_EXIST')
         }
     }
-
-    // Helper functions for testing
-    #[external(v0)]
-    fn set_pool_member_info(
-        ref self: ContractState, pool_member: ContractAddress, info: PoolMemberInfo
-    ) {
-        self.pool_member_info.write(pool_member, Option::Some(info));
-    }
-
-    #[external(v0)]
-    fn set_commission(ref self: ContractState, commission: u16) {
-        self.commission.write(commission);
-    }
 }
-
