@@ -436,7 +436,7 @@ mod StakeStark {
         fn _process_withdrawal_request(
             ref self: ContractState, shares: u256
         ) -> (ContractAddress, u256, u64) {
-            let caller = get_tx_info().account_contract_address;
+            let caller = get_caller_address();//get_tx_info().account_contract_address;
             let stSTRK = IstSTRKDispatcher { contract_address: self.stSTRK.read() };
 
             let assets = stSTRK.preview_redeem(shares);
@@ -472,9 +472,9 @@ mod StakeStark {
             let requests = self.get_available_withdrawal_requests(caller);
 
             for (
-                request_id, _
+                request_id, request
             ) in requests {
-                let request = self.withdrawal_requests.read((caller, request_id));
+                //let request = self.withdrawal_requests.read((caller, request_id));
                 assert(request.assets > 0, 'Invalid request ID');
                 assert(current_time >= request.withdrawal_time, 'Request not ready');
 
@@ -721,7 +721,7 @@ mod StakeStark {
                 }
                 i += 1;
             };
-        
+
             assert(remaining_amount == 0, 'Insufficient available funds');
         }
 
