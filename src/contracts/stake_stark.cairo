@@ -159,7 +159,9 @@ mod StakeStark {
         /// # Returns
         ///
         /// The number of LS tokens minted
-        fn deposit(ref self: ContractState, assets: u256, receiver: ContractAddress, user: ContractAddress) -> u256 {
+        fn deposit(
+            ref self: ContractState, assets: u256, receiver: ContractAddress, user: ContractAddress
+        ) -> u256 {
             self.pausable.assert_not_paused();
             self.reentrancy_guard.start();
 
@@ -167,7 +169,7 @@ mod StakeStark {
 
             let mut caller: ContractAddress = get_caller_address();
             //set user to caller when caller is stSTRK
-            if caller == self.get_lst_address(){
+            if caller == self.get_lst_address() {
                 caller = user
             }
 
@@ -304,16 +306,16 @@ mod StakeStark {
         /// Can only be called by an account with the PAUSER_ROLE.
         fn pause_stSTRK(ref self: ContractState) {
             self.access_control.assert_only_role(PAUSER_ROLE);
-            IstSTRKDispatcher{contract_address: self.get_lst_address()}.pause();
+            IstSTRKDispatcher { contract_address: self.get_lst_address() }.pause();
         }
 
         /// Unpauses the contract.
         /// Can only be called by an account with the PAUSER_ROLE
         fn unpause_stSTRK(ref self: ContractState) {
             self.access_control.assert_only_role(PAUSER_ROLE);
-            IstSTRKDispatcher{contract_address: self.get_lst_address()}.unpause();
+            IstSTRKDispatcher { contract_address: self.get_lst_address() }.unpause();
         }
-        
+
         /// Pauses the contract.
         /// Can only be called by an account with the PAUSER_ROLE.
         fn pause_delegator(ref self: ContractState) {
@@ -436,7 +438,7 @@ mod StakeStark {
         fn _process_withdrawal_request(
             ref self: ContractState, shares: u256
         ) -> (ContractAddress, u256, u64) {
-            let caller = get_caller_address();//get_tx_info().account_contract_address;
+            let caller = get_caller_address(); //get_tx_info().account_contract_address;
             let stSTRK = IstSTRKDispatcher { contract_address: self.stSTRK.read() };
 
             let assets = stSTRK.preview_redeem(shares);
@@ -646,31 +648,32 @@ mod StakeStark {
         /// This function is called by `_process_batch`.
         fn _request_withdrawal_from_available_delegator(ref self: ContractState, amount: u256) {
             let mut remaining_amount = amount;
-        
+
             // First pass: find the best fit delegator
             let mut i: u8 = 0;
             let mut best_fit_index: u8 = 0;
             let mut best_fit_amount: u256 = 0;
             let mut largest_available_amount: u256 = 0;
             let mut largest_amount_index: u8 = 0;
-        
+
             while i < self.num_delegators.read() {
                 if self._is_delegator_available(i) {
                     let delegator = IDelegatorDispatcher {
                         contract_address: self.delegators.read(i)
                     };
-        
+
                     let delegator_stake = delegator.get_total_stake();
-        
+
                     if delegator_stake > 0 {
                         // Track the largest stake in case we need to fall back to it
                         if delegator_stake > largest_available_amount {
                             largest_available_amount = delegator_stake;
                             largest_amount_index = i;
                         }
-        
-                        // Update best fit if this delegator can fulfill the request with less excess
-                        if delegator_stake >= remaining_amount 
+
+                        // Update best fit if this delegator can fulfill the request with less
+                        // excess
+                        if delegator_stake >= remaining_amount
                             && (best_fit_amount == 0 || delegator_stake < best_fit_amount) {
                             best_fit_index = i;
                             best_fit_amount = delegator_stake;
@@ -679,13 +682,13 @@ mod StakeStark {
                 }
                 i += 1;
             };
-        
+
             // If no exact fit was found, use the delegator with largest stake
             if best_fit_amount == 0 {
                 best_fit_index = largest_amount_index;
                 best_fit_amount = largest_available_amount;
             }
-        
+
             // Second pass: process withdrawal requests
             i = 0;
             while remaining_amount > 0 && i < self.num_delegators.read() {
@@ -695,28 +698,29 @@ mod StakeStark {
                         contract_address: self.delegators.read(current_index)
                     };
                     let delegator_stake = delegator.get_total_stake();
-        
+
                     if delegator_stake > 0 {
                         let withdrawal_amount = if delegator_stake <= remaining_amount {
                             delegator_stake
                         } else {
                             remaining_amount
                         };
-        
+
                         delegator.request_withdrawal(withdrawal_amount);
                         remaining_amount -= withdrawal_amount;
-        
+
                         // Update status after withdrawal request
                         let current_time = get_block_timestamp();
                         let unavailable_until = current_time + self.withdrawal_window_period.read();
                         self.delegator_status.write(current_index, (false, unavailable_until));
-                        self.emit(
-                            Events::DelegatorStatusChanged {
-                                delegator: self.delegators.read(current_index),
-                                status: false,
-                                available_time: unavailable_until
-                            }
-                        );
+                        self
+                            .emit(
+                                Events::DelegatorStatusChanged {
+                                    delegator: self.delegators.read(current_index),
+                                    status: false,
+                                    available_time: unavailable_until
+                                }
+                            );
                     }
                 }
                 i += 1;
@@ -926,20 +930,23 @@ mod StakeStark {
         fn get_withdrawable_amount(self: @ContractState, user: ContractAddress) -> u256 {
             let current_time = get_block_timestamp();
             let mut total_withdrawable = 0_u256;
-            let mut request_id = 0;
+            let next_withdrawal_request_id = self.next_withdrawal_request_id.read(user);
+
+            let mut request_id = if next_withdrawal_request_id > 0 {
+                next_withdrawal_request_id - 1
+            } else {
+                return total_withdrawable;
+            };
 
             loop {
                 let request = self.withdrawal_requests.read((user, request_id));
-                if request.assets == 0 {
-                    break;
-                }
-                if current_time >= request.withdrawal_time {
+                if request.assets > 0 && current_time >= request.withdrawal_time {
                     total_withdrawable += request.assets;
                 }
-                request_id += 1;
-                if request_id >= Bounded::<u32>::MAX {
+                if request_id == 0 {
                     break;
                 }
+                request_id -= 1;
             };
 
             total_withdrawable
@@ -958,20 +965,25 @@ mod StakeStark {
             self: @ContractState, user: ContractAddress
         ) -> Array<WithdrawalRequest> {
             let mut requests = ArrayTrait::new();
-            let mut request_id = 0;
-
+            let next_withdrawal_request_id = self.next_withdrawal_request_id.read(user);
+    
+            let mut request_id = if next_withdrawal_request_id > 0 {
+                next_withdrawal_request_id - 1
+            } else {
+                return requests;
+            };
+    
             loop {
                 let request = self.withdrawal_requests.read((user, request_id));
-                if request.assets == 0 {
+                if request.assets > 0 {
+                    requests.append(request);
+                }
+                if request_id == 0 {
                     break;
                 }
-                requests.append(request);
-                request_id += 1;
-                if request_id >= Bounded::<u32>::MAX {
-                    break;
-                }
+                request_id -= 1;
             };
-
+    
             requests
         }
 
