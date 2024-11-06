@@ -438,7 +438,7 @@ mod StakeStark {
         fn _process_withdrawal_request(
             ref self: ContractState, shares: u256
         ) -> (ContractAddress, u256, u64) {
-            let caller = get_caller_address(); //get_tx_info().account_contract_address;
+            let caller = get_tx_info().account_contract_address;
             let stSTRK = IstSTRKDispatcher { contract_address: self.stSTRK.read() };
 
             let assets = stSTRK.preview_redeem(shares);
