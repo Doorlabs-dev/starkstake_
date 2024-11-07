@@ -214,7 +214,7 @@ mod StakeStark {
                 caller = user
             };
 
-            let (caller, assets, withdrawal_time) = self._process_withdrawal_request(shares, caller);
+            let (assets, withdrawal_time) = self._process_withdrawal_request(shares, caller);
 
             self._add_withdrawal_to_queue(assets);
 
@@ -243,7 +243,7 @@ mod StakeStark {
                 caller = user
             }
 
-            let (caller, total_assets_to_withdraw) = self._process_withdrawals(caller);
+            let (total_assets_to_withdraw) = self._process_withdrawals(caller);
 
             assert(total_assets_to_withdraw > 0, 'No withdrawable requests');
 
@@ -449,7 +449,7 @@ mod StakeStark {
         /// This function is called by `request_withdrawal`.
         fn _process_withdrawal_request(
             ref self: ContractState, shares: u256, caller: ContractAddress
-        ) -> (ContractAddress, u256, u64) {
+        ) -> (u256, u64) {
             let stSTRK = IstSTRKDispatcher { contract_address: self.stSTRK.read() };
 
             let assets = stSTRK.preview_redeem(shares);
@@ -467,7 +467,7 @@ mod StakeStark {
 
             stSTRK.burn(shares, caller);
 
-            (caller, assets, withdrawal_time)
+            (assets, withdrawal_time)
         }
 
         /// Processes all available withdrawal requests for a user.
