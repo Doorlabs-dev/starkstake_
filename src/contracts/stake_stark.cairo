@@ -169,7 +169,7 @@ mod StakeStark {
 
             let mut caller: ContractAddress = get_caller_address();
             //set user to caller when caller is stSTRK
-            if caller == self.get_lst_address() {
+            if caller == self.stSTRK.read() {
                 caller = user
             }
 
@@ -204,11 +204,17 @@ mod StakeStark {
         /// # Arguments
         ///
         /// * `shares` - The amount of LS tokens to withdraw
-        fn request_withdrawal(ref self: ContractState, shares: u256) {
+        fn request_withdrawal(ref self: ContractState, shares: u256, user: ContractAddress) {
             self.pausable.assert_not_paused();
             self.reentrancy_guard.start();
 
-            let (caller, assets, withdrawal_time) = self._process_withdrawal_request(shares);
+            let mut caller: ContractAddress = get_caller_address();
+            //set user to caller when caller is stSTRK
+            if caller == self.stSTRK.read() {
+                caller = user
+            };
+
+            let (caller, assets, withdrawal_time) = self._process_withdrawal_request(shares, caller);
 
             self._add_withdrawal_to_queue(assets);
 
@@ -227,11 +233,17 @@ mod StakeStark {
         }
 
         /// Processes available withdrawal requests for the caller.
-        fn withdraw(ref self: ContractState) {
+        fn withdraw(ref self: ContractState, user: ContractAddress) {
             self.pausable.assert_not_paused();
             self.reentrancy_guard.start();
 
-            let (caller, total_assets_to_withdraw) = self._process_withdrawals();
+            let mut caller: ContractAddress = get_caller_address();
+            //set user to caller when caller is stSTRK
+            if caller == self.stSTRK.read() {
+                caller = user
+            }
+
+            let (caller, total_assets_to_withdraw) = self._process_withdrawals(caller);
 
             assert(total_assets_to_withdraw > 0, 'No withdrawable requests');
 
@@ -436,9 +448,8 @@ mod StakeStark {
         ///
         /// This function is called by `request_withdrawal`.
         fn _process_withdrawal_request(
-            ref self: ContractState, shares: u256
+            ref self: ContractState, shares: u256, caller: ContractAddress
         ) -> (ContractAddress, u256, u64) {
-            let caller = get_tx_info().account_contract_address;
             let stSTRK = IstSTRKDispatcher { contract_address: self.stSTRK.read() };
 
             let assets = stSTRK.preview_redeem(shares);
@@ -466,8 +477,7 @@ mod StakeStark {
         /// A tuple containing the caller's address and the total amount of assets to withdraw.
         ///
         /// This function is called by `withdraw`.
-        fn _process_withdrawals(ref self: ContractState) -> (ContractAddress, u256) {
-            let caller = get_tx_info().account_contract_address;
+        fn _process_withdrawals(ref self: ContractState, caller: ContractAddress) -> (ContractAddress, u256) {
             let current_time = get_block_timestamp();
             let mut total_assets_to_withdraw: u256 = 0;
 
