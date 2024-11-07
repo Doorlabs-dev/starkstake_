@@ -268,7 +268,7 @@ mod stSTRK {
             if self.erc20.total_supply() == 0 {
                 shares / INITIAL_SHARES_PER_ASSET
             } else {
-                (shares * self.total_assets()) / self.erc20.total_supply()
+                (shares * self.total_assets() + self.erc20.total_supply() - 1) / self.erc20.total_supply()
             }
         }
 
