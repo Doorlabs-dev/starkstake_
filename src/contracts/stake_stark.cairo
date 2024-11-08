@@ -243,7 +243,7 @@ mod StakeStark {
                 caller = user
             }
 
-            let (total_assets_to_withdraw) = self._process_withdrawals(caller);
+            let total_assets_to_withdraw = self._process_withdrawals(caller);
 
             assert(total_assets_to_withdraw > 0, 'No withdrawable requests');
 
@@ -477,7 +477,7 @@ mod StakeStark {
         /// A tuple containing the caller's address and the total amount of assets to withdraw.
         ///
         /// This function is called by `withdraw`.
-        fn _process_withdrawals(ref self: ContractState, caller: ContractAddress) -> (ContractAddress, u256) {
+        fn _process_withdrawals(ref self: ContractState, caller: ContractAddress) -> u256 {
             let current_time = get_block_timestamp();
             let mut total_assets_to_withdraw: u256 = 0;
 
@@ -500,7 +500,7 @@ mod StakeStark {
                     );
             };
 
-            (caller, total_assets_to_withdraw)
+            total_assets_to_withdraw
         }
 
 
