@@ -1,6 +1,5 @@
 target/
 
-*.info
 .env*
 .deploy*
 

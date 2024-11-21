@@ -20,13 +20,13 @@ mod contracts {
     }
     mod delegator;
     mod stark_stake;
-    mod stSTRK;
+    mod staked_strk_token;
 }
 mod interfaces {
     mod i_delegator;
     mod i_stark_stake;
-    mod i_stSTRK;
     mod i_starknet_staking;
+    mod i_staked_strk_token;
 }
 mod utils {
     mod constants;

@@ -7,6 +7,7 @@ mod StarkStake {
         SyscallResultTrait, syscalls::deploy_syscall, get_tx_info
     };
     use starknet::storage::Map;
+    use core::zeroable::Zeroable;
 
     use openzeppelin::access::accesscontrol::AccessControlComponent;
     use openzeppelin::security::PausableComponent;
@@ -19,8 +20,8 @@ mod StarkStake {
 
     use starkstake_::interfaces::{
         i_stark_stake::Events, i_stark_stake::IStarkStake, i_stark_stake::IStarkStakeView,
-        i_stark_stake::WithdrawalRequest, i_stSTRK::IstSTRKDispatcher,
-        i_stSTRK::IstSTRKDispatcherTrait, i_delegator::IDelegatorDispatcher,
+        i_stark_stake::WithdrawalRequest, i_staked_strk_token::IStakedStrkTokenDispatcher,
+        i_staked_strk_token::IStakedStrkTokenDispatcherTrait, i_delegator::IDelegatorDispatcher,
         i_delegator::IDelegatorDispatcherTrait,
     };
 
@@ -52,10 +53,12 @@ mod StarkStake {
     // Constants
     const FEE_DENOMINATOR: u256 = 10000;
     const MAX_FEE_PERCENTAGE: u16 = 1000; // 10%
+    const INITIAL_SHARES_PER_ASSET: u256 = 1;
 
     #[storage]
     struct Storage {
-        stSTRK: ContractAddress,
+        total_assets: u256,
+        staked_strk_token: ContractAddress,
         strk_token: ContractAddress,
         pool_contract: ContractAddress,
         num_delegators: u8,
@@ -91,6 +94,7 @@ mod StarkStake {
         DelegatorWithdrew: Events::DelegatorWithdrew,
         WithdrawalRequested: Events::WithdrawalRequested,
         Withdraw: Events::Withdraw,
+        Rebased: Events::Rebased,
         RewardDistributed: Events::RewardDistributed,
         StSRTKDeployed: Events::StSRTKDeployed,
         DelegatorAdded: Events::DelegatorAdded,
@@ -135,7 +139,7 @@ mod StarkStake {
         self.pool_contract.write(pool_contract);
         self.delegator_class_hash.write(delegator_class_hash);
         self.num_delegators.write(initial_delegator_count);
-        self.stSTRK.write(self._deploy_lst(stSTRK_class_hash));
+        self.staked_strk_token.write(self._deploy_stSTRK(stSTRK_class_hash));
         self.fee_ratio.write(initial_platform_fee);
         self.platform_fee_recipient.write(platform_fee_recipient);
         self.withdrawal_window_period.write(initial_withdrawal_window_period);
@@ -154,29 +158,23 @@ mod StarkStake {
         ///
         /// * `assets` - The amount of STRK tokens to deposit
         /// * `receiver` - Address that will receive the minted shares
-        /// * `user` - Address of user who call deposit in stSTRK contract
+        /// * `user` - Address of user who call deposit in staked_strk_token contract
         ///
         /// # Returns
         ///
         /// The number of LS tokens minted
-        fn deposit(
-            ref self: ContractState, assets: u256, receiver: ContractAddress, user: ContractAddress
-        ) -> u256 {
+        fn deposit(ref self: ContractState, assets: u256, receiver: ContractAddress) -> u256 {
             self.pausable.assert_not_paused();
             self.reentrancy_guard.start();
 
             assert(assets >= self.min_deposit_amount.read(), 'Deposit amount too low');
 
-            let mut caller: ContractAddress = get_caller_address();
-            //set user to caller when caller is stSTRK
-            if caller == self.stSTRK.read() {
-                caller = user
-            } else {
-                assert(user == caller, 'user must be a caller')
-            }
+            let caller = get_caller_address();
 
             let strk_dispatcher = IERC20Dispatcher { contract_address: self.strk_token.read() };
-            let stSTRK = IstSTRKDispatcher { contract_address: self.stSTRK.read() };
+            let staked_strk_token = IStakedStrkTokenDispatcher {
+                contract_address: self.staked_strk_token.read()
+            };
 
             // Transfer STRK tokens from caller to this contract
             assert(
@@ -185,38 +183,84 @@ mod StarkStake {
             );
 
             // Mint LS tokens to the user
-            let shares = if receiver.is_zero() {
-                stSTRK.mint(stSTRK.preview_deposit(assets), caller)
-            } else {
-                stSTRK.mint(stSTRK.preview_deposit(assets), receiver)
-            };
+            let shares = self.preview_deposit(assets);
+            staked_strk_token.mint(receiver, shares);
 
             assert(shares > 0, 'No shares minted');
 
             self._add_deposit_to_queue(assets);
 
-            self.emit(Events::Deposit { user: caller, amount: assets, shares });
+            // Update total assets
+            self.total_assets.write(self.total_assets.read() + assets);
+
+            self.emit(Events::Deposit { sender: caller, owner: receiver, assets, shares });
 
             self.reentrancy_guard.end();
+
             shares
         }
 
-        /// Requests a withdrawal of LS tokens.
+
+        /// Mints exact amount of shares to receiver
         ///
         /// # Arguments
         ///
-        /// * `shares` - The amount of LS tokens to withdraw
-        fn request_withdrawal(ref self: ContractState, shares: u256, user: ContractAddress) {
+        /// * `shares` - Amount of shares to mint
+        /// * `receiver` - Address that will receive the minted shares
+        ///
+        /// # Returns
+        ///
+        /// The amount of shares minted
+        fn mint(ref self: ContractState, shares: u256, receiver: ContractAddress) -> u256 {
             self.pausable.assert_not_paused();
             self.reentrancy_guard.start();
 
-            let mut caller: ContractAddress = get_caller_address();
-            //set user to caller when caller is stSTRK
-            if caller == self.stSTRK.read() {
-                caller = user
-            } else {
-                assert(user == caller, 'user must be a caller')
-            }
+            let assets = self.preview_mint(shares);
+            assert(assets != 0, 'ZERO_ASSETS');
+
+            assert(assets >= self.min_deposit_amount.read(), 'Deposit amount too low');
+
+            let caller = get_caller_address();
+
+            let strk_dispatcher = IERC20Dispatcher { contract_address: self.strk_token.read() };
+            let staked_strk_token = IStakedStrkTokenDispatcher {
+                contract_address: self.staked_strk_token.read()
+            };
+
+            // Transfer STRK tokens from caller to this contract
+            assert(
+                strk_dispatcher.transfer_from(caller, get_contract_address(), assets),
+                'Transfer failed'
+            );
+
+            // Mint LS tokens to the user
+            let shares = self.preview_deposit(assets);
+            staked_strk_token.mint(receiver, shares);
+
+            assert(shares > 0, 'No shares minted');
+
+            self._add_deposit_to_queue(assets);
+
+            // Update total assets
+            self.total_assets.write(self.total_assets.read() + assets);
+
+            self.emit(Events::Deposit { sender: caller, owner: receiver, assets, shares });
+
+            self.reentrancy_guard.end();
+
+            assets
+        }
+
+        /// Requests a withdrawal of stSTRK tokens.
+        ///
+        /// # Arguments
+        ///
+        /// * `shares` - The amount of stSTRK to withdraw
+        fn request_withdrawal(ref self: ContractState, shares: u256) {
+            self.pausable.assert_not_paused();
+            self.reentrancy_guard.start();
+
+            let caller = get_caller_address();
 
             let (assets, withdrawal_time) = self._process_withdrawal_request(shares, caller);
 
@@ -236,17 +280,77 @@ mod StarkStake {
             self.reentrancy_guard.end();
         }
 
-        /// Processes available withdrawal requests for the caller.
-        fn withdraw(ref self: ContractState, user: ContractAddress) {
+        /// Burns shares from owner and sends exact assets token to receiver
+        ///
+        /// # Arguments
+        ///
+        /// * `assets` - Amount of assets to withdraw
+        /// * `receiver` - Address that will receive the assets
+        /// * `owner` - Address of the owner of the shares
+        ///
+        /// # Returns
+        ///
+        /// The amount of shares burned
+        fn withdraw(
+            ref self: ContractState, assets: u256, receiver: ContractAddress, owner: ContractAddress
+        ) -> u256 {
+            // combined with staked_strk_token contract's withdraw funcion and stark_stake's withdraw function
+            // some modificaion needed
             self.pausable.assert_not_paused();
             self.reentrancy_guard.start();
 
-            let mut caller: ContractAddress = get_caller_address();
-            //set user to caller when caller is stSTRK
-            if caller == self.stSTRK.read() {
-                caller = user
-            } else {
-                assert(user == caller, 'user must be a caller')
+            let caller = get_caller_address();
+            let shares = self.convert_to_shares(assets);
+
+            if caller != owner {
+                let allowed = IERC20Dispatcher {
+                    contract_address: self.staked_strk_token.read()
+                }.allowance(owner, caller);
+                assert(allowed >= shares, 'EXCEED_ALLOWANCE');
+            }
+
+            let total_assets_to_withdraw = self._process_withdrawals(caller);
+
+            assert(total_assets_to_withdraw > 0, 'No withdrawable requests');
+
+            // TODO: mod to fit with ERC7540 standard
+            let strk_token = IERC20Dispatcher { contract_address: self.strk_token.read() };
+            strk_token.transfer(caller, total_assets_to_withdraw);
+
+            self.emit(Events::Withdraw { sender: caller, receiver, owner, assets, shares });
+
+            self.reentrancy_guard.end();
+            shares
+        }
+
+
+        /// Burns exact amount of shares from owner and sends assets to receiver
+        ///
+        /// # Arguments
+        ///
+        /// * `shares` - Amount of shares to redeem
+        /// * `receiver` - Address that will receive the assets
+        /// * `owner` - Address of the owner of the shares
+        ///
+        /// # Returns
+        ///
+        /// The amount of assets withdrawn
+        fn redeem(
+            ref self: ContractState, shares: u256, receiver: ContractAddress, owner: ContractAddress
+        ) -> u256 {
+            // combined with staked_strk_token contract's withdraw funcion and stark_stake's withdraw function
+            // some modificaion needed
+            self.pausable.assert_not_paused();
+            self.reentrancy_guard.start();
+
+            let assets = self.preview_redeem(shares);
+
+            let caller = get_caller_address();
+            if caller != owner {
+                let allowed = IERC20Dispatcher {
+                    contract_address: self.staked_strk_token.read()
+                }.allowance(owner, caller);
+                assert(allowed >= shares, 'EXCEED_ALLOWANCE');
             }
 
             let total_assets_to_withdraw = self._process_withdrawals(caller);
@@ -256,9 +360,24 @@ mod StarkStake {
             let strk_token = IERC20Dispatcher { contract_address: self.strk_token.read() };
             strk_token.transfer(caller, total_assets_to_withdraw);
 
-            self.emit(Events::Withdraw { user: caller, total_assets: total_assets_to_withdraw });
+            self.emit(Events::Withdraw { sender: caller, receiver, owner, assets, shares });
 
             self.reentrancy_guard.end();
+            assets
+        }
+
+
+        /// Updates the total amount of assets
+        ///
+        /// # Arguments
+        ///
+        /// * `new_total_assets` - New total amount of assets
+        fn rebase(ref self: ContractState, new_total_assets: u256) {
+            self.access_control.assert_only_role(OPERATOR_ROLE);
+            let old_total_assets = self.total_assets.read();
+            self.total_assets.write(new_total_assets);
+
+            self.emit(Events::Rebased { old_total_assets, new_total_assets });
         }
 
         /// Processes pending deposits and withdrawals, and collects rewards.
@@ -324,14 +443,14 @@ mod StarkStake {
         /// Can only be called by an account with the PAUSER_ROLE.
         fn pause_stSTRK(ref self: ContractState) {
             self.access_control.assert_only_role(PAUSER_ROLE);
-            IstSTRKDispatcher { contract_address: self.get_lst_address() }.pause();
+            IStakedStrkTokenDispatcher { contract_address: self.get_stSTRK_address() }.pause();
         }
 
         /// Unpauses the contract.
         /// Can only be called by an account with the PAUSER_ROLE
         fn unpause_stSTRK(ref self: ContractState) {
             self.access_control.assert_only_role(PAUSER_ROLE);
-            IstSTRKDispatcher { contract_address: self.get_lst_address() }.unpause();
+            IStakedStrkTokenDispatcher { contract_address: self.get_stSTRK_address() }.unpause();
         }
 
         /// Pauses the contract.
@@ -412,9 +531,10 @@ mod StarkStake {
         }
 
         //TODO: add time lock
-        fn upgrade_lst(ref self: ContractState, new_class_hash: ClassHash) {
+        fn upgrade_stSTRK(ref self: ContractState, new_class_hash: ClassHash) {
             self.access_control.assert_only_role(UPGRADER_ROLE);
-            IstSTRKDispatcher { contract_address: self.stSTRK.read() }.upgrade(new_class_hash);
+            IStakedStrkTokenDispatcher { contract_address: self.staked_strk_token.read() }
+                .upgrade(new_class_hash);
         }
     }
 
@@ -456,9 +576,11 @@ mod StarkStake {
         fn _process_withdrawal_request(
             ref self: ContractState, shares: u256, caller: ContractAddress
         ) -> (u256, u64) {
-            let stSTRK = IstSTRKDispatcher { contract_address: self.stSTRK.read() };
+            let staked_strk_token = IERC20Dispatcher {
+                contract_address: self.staked_strk_token.read()
+            };
 
-            let assets = stSTRK.preview_redeem(shares);
+            let assets = self.preview_redeem(shares);
             assert(assets > 0, 'Withdrawal amount too small');
 
             let current_time = get_block_timestamp();
@@ -471,8 +593,11 @@ mod StarkStake {
                 .withdrawal_requests
                 .write((caller, request_id), WithdrawalRequest { assets, withdrawal_time });
 
-            stSTRK.burn(shares, caller);
-
+            // burn
+            staked_strk_token.transfer_from(caller, Zeroable::zero(), shares);
+            //change total assets for exchange ratio
+            self.total_assets.write(self.total_assets.read() - assets);
+            
             (assets, withdrawal_time)
         }
 
@@ -480,7 +605,7 @@ mod StarkStake {
         ///
         /// # Returns
         ///
-        /// A tuple containing the caller's address and the total amount of assets to withdraw.
+        /// total amount of assets to withdraw.
         ///
         /// This function is called by `withdraw`.
         fn _process_withdrawals(ref self: ContractState, caller: ContractAddress) -> u256 {
@@ -792,28 +917,25 @@ mod StarkStake {
             deployed_address
         }
 
-        /// Deploys the LST (Liquid Staking Token) contract.
+        /// Deploys the staked_strk_token (Liquid Staking Token) contract.
         ///
         /// # Arguments
         ///
-        /// * `lst_class_hash` - The class hash of the LST contract
+        /// * `stSTRK_class_hash` - The class hash of the staked_strk_token contract
         ///
         /// # Returns
         ///
-        /// The address of the deployed LST contract.
+        /// The address of the deployed staked_strk_token contract.
         ///
         /// This function is called during the contract constructor.
-        fn _deploy_lst(ref self: ContractState, lst_class_hash: ClassHash) -> ContractAddress {
+        fn _deploy_stSTRK(
+            ref self: ContractState, stSTRK_class_hash: ClassHash
+        ) -> ContractAddress {
             let mut calldata: Array::<felt252> = array![];
-            let name: ByteArray = "staked STRK";
-            let symbol: ByteArray = "stSTRK";
-            name.serialize(ref calldata);
-            symbol.serialize(ref calldata);
             get_contract_address().serialize(ref calldata);
-            self.strk_token.read().serialize(ref calldata);
 
             let (deployed_address, _) = starknet::deploy_syscall(
-                lst_class_hash, 0, calldata.span(), false
+                stSTRK_class_hash, 0, calldata.span(), false
             )
                 .unwrap_syscall();
 
@@ -842,7 +964,7 @@ mod StarkStake {
         }
 
 
-        /// Distributes collected rewards between the platform and LST holders.
+        /// Distributes collected rewards between the platform and staked_strk_token holders.
         ///
         /// # Arguments
         ///
@@ -860,10 +982,9 @@ mod StarkStake {
             let transfer_success = strk_token.transfer(fee_recipient, platform_fee_amount);
             assert(transfer_success, 'Platform fee transfer failed');
 
-            // Distribute remaining rewards to stSTRK holders
-            let stSTRK = IstSTRKDispatcher { contract_address: self.stSTRK.read() };
-            let new_total_assets = stSTRK.total_assets() + distributed_reward;
-            stSTRK.rebase(new_total_assets);
+            // Distribute remaining rewards to staked_strk_token holders
+            let new_total_assets = self.total_assets() + distributed_reward;
+            self.rebase(new_total_assets);
 
             self
                 .emit(
@@ -891,13 +1012,199 @@ mod StarkStake {
 
     #[abi(embed_v0)]
     impl StarkStakeViewImpl of IStarkStakeView<ContractState> {
-        /// Returns the address of the Liquid Staking Token (LST) contract.
+        /// Returns the address of the underlying asset
+        fn asset(self: @ContractState) -> ContractAddress {
+            self.strk_token.read()
+        }
+
+        /// Returns the total amount of the underlying asset
+        fn total_assets(self: @ContractState) -> u256 {
+            self.total_assets.read()
+        }
+
+        /// Converts a given amount of assets to shares
+        ///
+        /// # Arguments
+        ///
+        /// * `assets` - Amount of assets to convert
         ///
         /// # Returns
         ///
-        /// The ContractAddress of the LST contract.
-        fn get_lst_address(self: @ContractState) -> ContractAddress {
-            self.stSTRK.read()
+        /// The equivalent amount of shares
+        fn convert_to_shares(self: @ContractState, assets: u256) -> u256 {
+            if self.total_assets() == 0 {
+                assets * INITIAL_SHARES_PER_ASSET
+            } else {
+                (assets * IERC20Dispatcher{ contract_address: self.staked_strk_token.read() }.total_supply()) / self.total_assets()
+            }
+        }
+
+        /// Converts a given amount of shares to assets
+        ///
+        /// # Arguments
+        ///
+        /// * `shares` - Amount of shares to convert
+        ///
+        /// # Returns
+        ///
+        /// The equivalent amount of assets
+        fn convert_to_assets(self: @ContractState, shares: u256) -> u256 {
+            if (IERC20Dispatcher{ contract_address: self.staked_strk_token.read() }.total_supply()) == 0 {
+                shares / INITIAL_SHARES_PER_ASSET
+            } else {
+                (shares * self.total_assets()) / IERC20Dispatcher{ contract_address: self.staked_strk_token.read() }.total_supply()
+            }
+        }
+
+        /// Returns the maximum amount of the underlying asset that can be deposited
+        ///
+        /// # Arguments
+        ///
+        /// * `receiver` - Address that will receive the minted tokens
+        ///
+        /// # Returns
+        ///
+        /// The maximum amount of assets that can be deposited
+        fn max_deposit(self: @ContractState, receiver: ContractAddress) -> u256 {
+            if self.pausable.is_paused() {
+                0
+            } else {
+                Bounded::<u256>::MAX - self.total_assets()
+            }
+        }
+
+        /// Simulates the effects of depositing assets at the current status
+        ///
+        /// # Arguments
+        ///
+        /// * `assets` - Amount of assets to deposit
+        ///
+        /// # Returns
+        ///
+        /// The amount of shares that would be minted
+        fn preview_deposit(self: @ContractState, assets: u256) -> u256 {
+            self.convert_to_shares(assets)
+        }
+
+        /// Returns the maximum amount of shares that can be minted
+        ///
+        /// # Arguments
+        ///
+        /// * `receiver` - Address that will receive the minted tokens
+        ///
+        /// # Returns
+        ///
+        /// The maximum amount of shares that can be minted
+        fn max_mint(self: @ContractState, receiver: ContractAddress) -> u256 {
+            if self.pausable.is_paused() {
+                0
+            } else {
+                Bounded::<u256>::MAX - IERC20Dispatcher{ contract_address: self.staked_strk_token.read() }.total_supply()
+            }
+        }
+
+        /// Simulates the effects of minting shares at the current status
+        ///
+        /// # Arguments
+        ///
+        /// * `shares` - Amount of shares to mint assets for
+        ///
+        /// # Returns
+        ///
+        /// The amount of assets that would be need to mint `share` amount
+        fn preview_mint(self: @ContractState, shares: u256) -> u256 {
+            if (IERC20Dispatcher{ contract_address: self.staked_strk_token.read() }.total_supply()) == 0 {
+                shares / INITIAL_SHARES_PER_ASSET
+            } else {
+                (shares * self.total_assets() + IERC20Dispatcher{ contract_address: self.staked_strk_token.read() }.total_supply() - 1)
+                    / IERC20Dispatcher{ contract_address: self.staked_strk_token.read() }.total_supply()
+            }
+        }
+
+        /// Returns the maximum amount of the underlying asset that can be withdrawn
+        ///
+        /// # Arguments
+        ///
+        /// * `owner` - Address of the owner
+        ///
+        /// # Returns
+        ///
+        /// The maximum amount of assets that can be withdrawn
+        fn max_withdraw(self: @ContractState, owner: ContractAddress) -> u256 {
+            if self.pausable.is_paused() {
+                0
+            } else {
+                self.convert_to_assets(IERC20Dispatcher{ contract_address: self.staked_strk_token.read() }.balance_of(owner))
+            }
+        }
+
+        /// Simulates the effects of withdrawing assets at the current status
+        ///
+        /// # Arguments
+        ///
+        /// * `assets` - Amount of assets to withdraw
+        ///
+        /// # Returns
+        ///
+        /// The amount of shares that would be burned
+        fn preview_withdraw(self: @ContractState, assets: u256) -> u256 {
+            if self.total_assets() == 0 {
+                0
+            } else {
+                (assets * IERC20Dispatcher{ contract_address: self.staked_strk_token.read() }.total_supply() + self.total_assets() - 1) / self.total_assets()
+            }
+        }
+
+        /// Returns the maximum amount of shares that can be redeemed
+        ///
+        /// # Arguments
+        ///
+        /// * `owner` - Address of the owner
+        ///
+        /// # Returns
+        ///
+        /// The maximum amount of shares that can be redeemed
+        fn max_redeem(self: @ContractState, owner: ContractAddress) -> u256 {
+            if self.pausable.is_paused() {
+                0
+            } else {
+                IERC20Dispatcher{ contract_address: self.staked_strk_token.read() }.balance_of(owner)
+            }
+        }
+
+        /// Simulates the effects of redeeming shares at the current status
+        ///
+        /// # Arguments
+        ///
+        /// * `shares` - Amount of shares to redeem
+        ///
+        /// # Returns
+        ///
+        /// The amount of assets that would be withdrawn
+        fn preview_redeem(self: @ContractState, shares: u256) -> u256 {
+            self.convert_to_assets(shares)
+        }
+
+        /// Returns the current ratio of shares to assets
+        ///
+        /// # Returns
+        ///
+        /// The number of shares per asset, scaled by 1e18
+        fn shares_per_asset(self: @ContractState) -> u256 {
+            if self.total_assets() == 0 {
+                INITIAL_SHARES_PER_ASSET
+            } else { 
+                (IERC20Dispatcher{ contract_address: self.staked_strk_token.read() }.total_supply() * 1_000_000_000_000_000_000) / self.total_assets()
+            }
+        }
+
+        /// Returns the address of the Liquid Staking Token (staked_strk_token) contract.
+        ///
+        /// # Returns
+        ///
+        /// The ContractAddress of the staked_strk_token contract.
+        fn get_stSTRK_address(self: @ContractState) -> ContractAddress {
+            self.staked_strk_token.read()
         }
 
         /// Returns an array of all delegator addresses.
@@ -982,13 +1289,13 @@ mod StarkStake {
         ) -> Array<WithdrawalRequest> {
             let mut requests = ArrayTrait::new();
             let next_withdrawal_request_id = self.next_withdrawal_request_id.read(user);
-    
+
             let mut request_id = if next_withdrawal_request_id > 0 {
                 next_withdrawal_request_id - 1
             } else {
                 return requests;
             };
-    
+
             loop {
                 let request = self.withdrawal_requests.read((user, request_id));
                 if request.assets > 0 {
@@ -999,7 +1306,7 @@ mod StarkStake {
                 }
                 request_id -= 1;
             };
-    
+
             requests
         }
 

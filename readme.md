@@ -1,7 +1,7 @@
 
 # starkstake_
 
-starkstake_ is a liquid staking protocol built on Starknet. It enables users to stake STRK tokens and receive liquid staking tokens (stSTRK) in return. These tokens can be traded, used in DeFi, or redeemed for the underlying STRK tokens after a withdrawal request.
+starkstake_ is a liquid staking protocol built on Starknet. It enables users to stake STRK tokens and receive liquid staking tokens (staked_strk_token) in return. These tokens can be traded, used in DeFi, or redeemed for the underlying STRK tokens after a withdrawal request.
 
 ## Project Structure
 
@@ -18,7 +18,7 @@ starkstake_ is a liquid staking protocol built on Starknet. It enables users to 
     │   └── access_control.cairo # Role-based access control component
     ├── contracts
     │   ├── delegator.cairo    # Delegator contract for managing validator delegation
-    │   ├── stSTRK.cairo       # Liquid staking token (stSTRK) contract
+    │   ├── staked_strk_token.cairo       # Liquid staking token (staked_strk_token) contract
     │   ├── stark_stake.cairo  # Main liquid staking protocol contract
     │   └── tests
     │       ├── mock
@@ -29,7 +29,7 @@ starkstake_ is a liquid staking protocol built on Starknet. It enables users to 
     │       └── unit_test.cairo
     ├── interfaces
     │   ├── i_delegator.cairo   # Interface for the Delegator contract
-    │   ├── i_stSTRK.cairo      # Interface for stSTRK contract
+    │   ├── i_staked_strk_token.cairo      # Interface for staked_strk_token contract
     │   ├── i_stark_stake.cairo # Interface for the StarkStake contract
     │   └── i_starknet_staking.cairo # Interface for Starknet staking pool
     ├── lib.cairo
@@ -40,7 +40,7 @@ starkstake_ is a liquid staking protocol built on Starknet. It enables users to 
 ## Core Contracts
 
 - **StarkStake**: The main contract managing the liquid staking process. Users can deposit STRK tokens and request withdrawals.
-- **stSTRK**: The liquid staking token representing a user's share in the protocol. It rebases based on the rewards distributed.
+- **staked_strk_token**: The liquid staking token representing a user's share in the protocol. It rebases based on the rewards distributed.
 - **Delegator**: Manages the delegation of tokens to the Starknet staking pool and handles rewards collection and withdrawal requests.
 
 ## Installation

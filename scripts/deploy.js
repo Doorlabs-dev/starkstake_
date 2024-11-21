@@ -14,7 +14,7 @@ const account = new Account(provider, process.env.ACCOUNT_ADDRESS, process.env.P
 
 async function main() {
     const lstClassHash = await declareContract(LST_PATH);
-    console.log("stSTRK Class Hash:", lstClassHash);
+    console.log("staked_strk_token Class Hash:", lstClassHash);
 
     const liquidStakingClassHash = await declareContract(LIQUID_STAKING_PATH);
     console.log("StarkStake Class Hash:", liquidStakingClassHash);
