@@ -1,5 +1,5 @@
 {
-  "name": "stakestark_",
+  "name": "starkstake_",
   "version": "1.0.0",
   "main": "index.js",
   "scripts": {
@@ -8,15 +8,15 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/Doorlabs-dev/stakestark_.git"
+    "url": "git+https://github.com/Doorlabs-dev/starkstake_.git"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "bugs": {
-    "url": "https://github.com/Doorlabs-dev/stakestark_/issues"
+    "url": "https://github.com/Doorlabs-dev/starkstake_/issues"
   },
-  "homepage": "https://github.com/Doorlabs-dev/stakestark_#readme",
+  "homepage": "https://github.com/Doorlabs-dev/starkstake_#readme",
   "description": "",
   "dependencies": {
     "dotenv": "^16.4.5",

@@ -4,9 +4,9 @@ const fs = require("fs");
 // Load environment variables
 require("dotenv").config();
 
-const LST_PATH = "target/dev/stakestark__stSTRK.contract_class.json";
-const LIQUID_STAKING_PATH = "target/dev/stakestark__StakeStark.contract_class.json";
-const DELEGATOR_PATH = "target/dev/stakestark__Delegator.contract_class.json";
+const LST_PATH = "target/dev/starkstake__stSTRK.contract_class.json";
+const LIQUID_STAKING_PATH = "target/dev/starkstake__StarkStake.contract_class.json";
+const DELEGATOR_PATH = "target/dev/starkstake__Delegator.contract_class.json";
 
 // Setup provider and account
 const provider = new RpcProvider({ nodeUrl: process.env.RPC_URL });
@@ -17,7 +17,7 @@ async function main() {
     console.log("stSTRK Class Hash:", lstClassHash);
 
     const liquidStakingClassHash = await declareContract(LIQUID_STAKING_PATH);
-    console.log("StakeStark Class Hash:", liquidStakingClassHash);
+    console.log("StarkStake Class Hash:", liquidStakingClassHash);
 
     const delegatorClassHash = await declareContract(DELEGATOR_PATH);
     console.log("Delegator Class Hash:", delegatorClassHash);
@@ -42,7 +42,7 @@ async function main() {
     });
 
     await provider.waitForTransaction(deployResponse.transaction_hash);
-    console.log("StakeStarkProtocol deployed at:", deployResponse.contract_address);
+    console.log("StarkStakeProtocol deployed at:", deployResponse.contract_address);
 
     const liquidStakingContract = new Contract(liquidStakingAbi, deployResponse.contract_address, provider);
 

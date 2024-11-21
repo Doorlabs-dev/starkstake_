@@ -1,13 +1,13 @@
 use super::test_utils::{TestSetup, setup, approve_and_deposit_in_stSTRK};
 use snforge_std::{cheat_caller_address, CheatSpan, start_cheat_block_timestamp_global,};
 use starknet::testing::{set_caller_address, set_contract_address, set_block_timestamp};
-use stakestark_::interfaces::i_stake_stark::{
-    IStakeStark, IStakeStarkDispatcher, IStakeStarkDispatcherTrait, IStakeStarkView,
-    IStakeStarkViewDispatcher, IStakeStarkViewDispatcherTrait
+use starkstake_::interfaces::i_stark_stake::{
+    IStarkStake, IStarkStakeDispatcher, IStarkStakeDispatcherTrait, IStarkStakeView,
+    IStarkStakeViewDispatcher, IStarkStakeViewDispatcherTrait
 };
-use stakestark_::interfaces::i_stSTRK::{IstSTRK, IstSTRKDispatcher, IstSTRKDispatcherTrait};
+use starkstake_::interfaces::i_stSTRK::{IstSTRK, IstSTRKDispatcher, IstSTRKDispatcherTrait};
 use openzeppelin::token::erc20::interface::{IERC20Dispatcher, IERC20DispatcherTrait};
-use stakestark_::contracts::tests::mock::strk::{ISTRK, ISTRKDispatcher, ISTRKDispatcherTrait};
+use starkstake_::contracts::tests::mock::strk::{ISTRK, ISTRKDispatcher, ISTRKDispatcherTrait};
 
 #[test]
 fn test_stSTRK_initialization() {
@@ -47,7 +47,7 @@ fn test_stSTRK_rebase() {
     let new_total_assets = initial_deposit + (initial_deposit / 10);
 
     // Perform rebase
-    cheat_caller_address(setup.lst_address, setup.stake_stark_contact, CheatSpan::TargetCalls(1));
+    cheat_caller_address(setup.lst_address, setup.stark_stake_contact, CheatSpan::TargetCalls(1));
     setup.lst.rebase(new_total_assets);
 
     // Verify new conversion rates
@@ -64,7 +64,7 @@ fn test_max_deposit() {
     assert(max_deposit > 0, 'Max deposit should be non-zero');
 
     // Test max deposit when paused
-    cheat_caller_address(setup.lst_address, setup.stake_stark_contact, CheatSpan::TargetCalls(3));
+    cheat_caller_address(setup.lst_address, setup.stark_stake_contact, CheatSpan::TargetCalls(3));
     setup.lst.pause();
     let max_deposit_paused = setup.lst.max_deposit(setup.user);
     assert(max_deposit_paused == 0, 'Max deposit must 0 when paused');
@@ -82,7 +82,7 @@ fn test_max_mint() {
 
     // Test after some minting
     let mint_amount = 1000000000000000000; // 1 STRK worth of shares
-    cheat_caller_address(setup.lst_address, setup.stake_stark_contact, CheatSpan::TargetCalls(1));
+    cheat_caller_address(setup.lst_address, setup.stark_stake_contact, CheatSpan::TargetCalls(1));
     setup.lst.mint(mint_amount, setup.user);
 
     let new_max_mint = setup.lst.max_mint(setup.user);
@@ -160,7 +160,7 @@ fn test_preview_redeem() {
 
     // Test after rebase
     approve_and_deposit_in_stSTRK(setup, setup.user, shares);
-    cheat_caller_address(setup.lst_address, setup.stake_stark_contact, CheatSpan::TargetCalls(1));
+    cheat_caller_address(setup.lst_address, setup.stark_stake_contact, CheatSpan::TargetCalls(1));
     setup.lst.rebase(shares * 2); // Double the assets
 
     let new_assets = setup.lst.preview_redeem(shares);
@@ -176,7 +176,7 @@ fn test_multiple_rebases() {
 
     // First rebase (10% increase)
     let first_total = initial_deposit + (initial_deposit / 10);
-    cheat_caller_address(setup.lst_address, setup.stake_stark_contact, CheatSpan::TargetCalls(2));
+    cheat_caller_address(setup.lst_address, setup.stark_stake_contact, CheatSpan::TargetCalls(2));
     setup.lst.rebase(first_total);
 
     // Second rebase (another 10% increase)
@@ -199,7 +199,7 @@ fn test_deposit_zero_shares() {
 #[should_panic(expected: ('ZERO_ASSETS',))]
 fn test_mint_zero_assets() {
     let setup = setup();
-    cheat_caller_address(setup.lst_address, setup.stake_stark_contact, CheatSpan::TargetCalls(1));
+    cheat_caller_address(setup.lst_address, setup.stark_stake_contact, CheatSpan::TargetCalls(1));
     setup.lst.mint(0, setup.user);
 }
 
@@ -213,7 +213,7 @@ fn test_shares_per_asset_after_multiple_operations() {
     let initial_ratio = setup.lst.shares_per_asset();
 
     // Rebase with rewards
-    cheat_caller_address(setup.lst_address, setup.stake_stark_contact, CheatSpan::TargetCalls(1));
+    cheat_caller_address(setup.lst_address, setup.stark_stake_contact, CheatSpan::TargetCalls(1));
     setup.lst.rebase(initial_deposit * 2);
     let after_rebase_ratio = setup.lst.shares_per_asset();
 
@@ -229,7 +229,7 @@ fn test_burn_mechanism() {
     let shares = approve_and_deposit_in_stSTRK(setup, setup.user, deposit_amount);
 
     // Burn shares
-    cheat_caller_address(setup.lst_address, setup.stake_stark_contact, CheatSpan::TargetCalls(1));
+    cheat_caller_address(setup.lst_address, setup.stark_stake_contact, CheatSpan::TargetCalls(1));
     setup.lst.burn(shares / 2, setup.user);
 
     let remaining_shares = IERC20Dispatcher { contract_address: setup.lst_address }
@@ -244,7 +244,7 @@ fn test_operations_when_paused() {
     let deposit_amount: u256 = 100_000_000_000_000_000_000;
 
     // Pause the contract
-    cheat_caller_address(setup.lst_address, setup.stake_stark_contact, CheatSpan::TargetCalls(1));
+    cheat_caller_address(setup.lst_address, setup.stark_stake_contact, CheatSpan::TargetCalls(1));
     setup.lst.pause();
 
     // Try to deposit while paused

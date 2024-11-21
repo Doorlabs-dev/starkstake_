@@ -10,16 +10,16 @@ mod stSTRK {
     use openzeppelin_introspection::src5::SRC5Component;
     use openzeppelin::token::erc20::interface::{IERC20Dispatcher, IERC20DispatcherTrait};
 
-    use stakestark_::components::access_control::RoleBasedAccessControlComponent;
+    use starkstake_::components::access_control::RoleBasedAccessControlComponent;
 
-    use stakestark_::utils::constants::{
+    use starkstake_::utils::constants::{
         ADMIN_ROLE, MINTER_ROLE, BURNER_ROLE, PAUSER_ROLE, UPGRADER_ROLE
     };
 
-    use stakestark_::interfaces::{
-        i_stSTRK::IstSTRK, i_stSTRK::Events, i_stake_stark::IStakeStarkDispatcher,
-        i_stake_stark::IStakeStarkDispatcherTrait, i_stake_stark::IStakeStarkViewDispatcher,
-        i_stake_stark::IStakeStarkViewDispatcherTrait
+    use starkstake_::interfaces::{
+        i_stSTRK::IstSTRK, i_stSTRK::Events, i_stark_stake::IStarkStakeDispatcher,
+        i_stark_stake::IStarkStakeDispatcherTrait, i_stark_stake::IStarkStakeViewDispatcher,
+        i_stark_stake::IStarkStakeViewDispatcherTrait
     };
 
     // Component declarations
@@ -59,7 +59,7 @@ mod stSTRK {
 
     #[storage]
     struct Storage {
-        stake_stark: ContractAddress,
+        stark_stake: ContractAddress,
         asset: ContractAddress,
         total_assets: u256,
         #[substorage(v0)]
@@ -107,14 +107,14 @@ mod stSTRK {
     ///
     /// * `name` - Name of the token
     /// * `symbol` - Symbol of the token
-    /// * `stake_stark` - Address of the liquid staking protocol
+    /// * `stark_stake` - Address of the liquid staking protocol
     /// * `strk_token` - Address of the underlying asset
     #[constructor]
     fn constructor(
         ref self: ContractState,
         name: ByteArray,
         symbol: ByteArray,
-        stake_stark: ContractAddress,
+        stark_stake: ContractAddress,
         strk_token: ContractAddress,
     ) {
         self.erc20.initializer(name, symbol);
@@ -122,13 +122,13 @@ mod stSTRK {
         self.asset.write(strk_token);
         self.total_assets.write(0);
 
-        self.stake_stark.write(stake_stark);
+        self.stark_stake.write(stark_stake);
 
         // Grant roles
-        self.access_control.grant_role(UPGRADER_ROLE, stake_stark);
-        self.access_control.grant_role(MINTER_ROLE, stake_stark);
-        self.access_control.grant_role(BURNER_ROLE, stake_stark);
-        self.access_control.grant_role(PAUSER_ROLE, stake_stark);
+        self.access_control.grant_role(UPGRADER_ROLE, stark_stake);
+        self.access_control.grant_role(MINTER_ROLE, stark_stake);
+        self.access_control.grant_role(BURNER_ROLE, stark_stake);
+        self.access_control.grant_role(PAUSER_ROLE, stark_stake);
     }
 
     #[abi(embed_v0)]
@@ -226,9 +226,9 @@ mod stSTRK {
 
             let caller = get_caller_address();
 
-            // Call deposit function of StakeStarkProtocol
-            let stake_stark = IStakeStarkDispatcher { contract_address: self.stake_stark.read() };
-            let minted_shares = stake_stark.deposit(assets, receiver, caller);
+            // Call deposit function of StarkStakeProtocol
+            let stark_stake = IStarkStakeDispatcher { contract_address: self.stark_stake.read() };
+            let minted_shares = stark_stake.deposit(assets, receiver, caller);
 
             assert(minted_shares == shares, 'Shares mismatch');
 
@@ -365,9 +365,9 @@ mod stSTRK {
                 self.erc20._approve(owner, caller, allowed - shares);
             }
 
-            // Call request_withdrawal function of StakeStarkProtocol
-            let stake_stark = IStakeStarkDispatcher { contract_address: self.stake_stark.read() };
-            stake_stark.request_withdrawal(shares, caller);
+            // Call request_withdrawal function of StarkStakeProtocol
+            let stark_stake = IStarkStakeDispatcher { contract_address: self.stark_stake.read() };
+            stark_stake.request_withdrawal(shares, caller);
 
             self.emit(Events::Withdraw { sender: caller, receiver, owner, assets, shares });
 
@@ -432,9 +432,9 @@ mod stSTRK {
 
             let assets = self.preview_redeem(shares);
 
-            // Call request_withdrawal function of StakeStarkProtocol
-            let stake_stark = IStakeStarkDispatcher { contract_address: self.stake_stark.read() };
-            stake_stark.request_withdrawal(shares, caller);
+            // Call request_withdrawal function of StarkStakeProtocol
+            let stark_stake = IStarkStakeDispatcher { contract_address: self.stark_stake.read() };
+            stark_stake.request_withdrawal(shares, caller);
 
             self.emit(Events::Redeem { caller, receiver, owner, assets, shares });
 

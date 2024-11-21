@@ -69,8 +69,8 @@ pub mod MockStaking {
         ContractAddress, ClassHash, get_caller_address, get_block_timestamp, get_contract_address,
         SyscallResultTrait, syscalls::deploy_syscall
     };
-    use stakestark_::interfaces::i_starknet_staking::{IPool, IPoolDispatcher, IPoolDispatcherTrait};
-    use stakestark_::contracts::tests::mock::strk::{ISTRKDispatcher, ISTRKDispatcherTrait};
+    use starkstake_::interfaces::i_starknet_staking::{IPool, IPoolDispatcher, IPoolDispatcherTrait};
+    use starkstake_::contracts::tests::mock::strk::{ISTRKDispatcher, ISTRKDispatcherTrait};
 
     #[storage]
     struct Storage {

@@ -10,17 +10,17 @@ use snforge_std::{
     stop_cheat_block_timestamp_global
 };
 
-use stakestark_::interfaces::i_stake_stark::{
-    IStakeStark, IStakeStarkDispatcher, IStakeStarkDispatcherTrait, IStakeStarkView,
-    IStakeStarkViewDispatcher, IStakeStarkViewDispatcherTrait
+use starkstake_::interfaces::i_stark_stake::{
+    IStarkStake, IStarkStakeDispatcher, IStarkStakeDispatcherTrait, IStarkStakeView,
+    IStarkStakeViewDispatcher, IStarkStakeViewDispatcherTrait
 };
-use stakestark_::interfaces::i_stSTRK::{IstSTRK, IstSTRKDispatcher, IstSTRKDispatcherTrait};
+use starkstake_::interfaces::i_stSTRK::{IstSTRK, IstSTRKDispatcher, IstSTRKDispatcherTrait};
 use openzeppelin::token::erc20::interface::{IERC20Dispatcher, IERC20DispatcherTrait};
 
-use stakestark_::contracts::tests::mock::strk::{ISTRK, ISTRKDispatcher, ISTRKDispatcherTrait};
+use starkstake_::contracts::tests::mock::strk::{ISTRK, ISTRKDispatcher, ISTRKDispatcherTrait};
 
 #[test]
-fn test_stake_stark_system_overall() {
+fn test_stark_stake_system_overall() {
     let setup = setup();
 
     test_deposit(setup);
@@ -38,7 +38,7 @@ fn test_deposit(setup: TestSetup) {
     //setup.lst_address}.balance_of(setup.user),'share is not correct');
     assert(shares > 0, 'Deposit should return shares');
 
-    let pending_deposits = setup.stake_stark_view.get_pending_deposits();
+    let pending_deposits = setup.stark_stake_view.get_pending_deposits();
     assert(pending_deposits == deposit_amount, 'Incorrect pending deposits');
 }
 
@@ -47,18 +47,18 @@ fn test_request_withdrawal(setup: TestSetup) {
 
     request_withdrawal(setup, setup.user, withdrawal_shares);
 
-    let pending_withdrawals = setup.stake_stark_view.get_pending_withdrawals();
+    let pending_withdrawals = setup.stark_stake_view.get_pending_withdrawals();
     assert(pending_withdrawals > 0, 'No pending withdrawals');
 
-    let withdrawal_requests = setup.stake_stark_view.get_all_withdrawal_requests(setup.user);
+    let withdrawal_requests = setup.stark_stake_view.get_all_withdrawal_requests(setup.user);
     assert(withdrawal_requests.len() > 0, 'No withdrawal requests');
 }
 
 fn test_process_batch(setup: TestSetup) {
     process_batch(setup);
 
-    let pending_deposits = setup.stake_stark_view.get_pending_deposits();
-    let pending_withdrawals = setup.stake_stark_view.get_pending_withdrawals();
+    let pending_deposits = setup.stark_stake_view.get_pending_deposits();
+    let pending_withdrawals = setup.stark_stake_view.get_pending_withdrawals();
 
     assert(pending_deposits == 0, 'Pending deposits not processed');
     assert(pending_withdrawals == 0, 'Pending withdraw not processed');
@@ -68,14 +68,14 @@ fn test_withdraw(setup: TestSetup) {
     // Advance time to make withdrawal requests available
     start_cheat_block_timestamp_global(get_block_timestamp() + EXIT_WAIT_WINDOW + 1);
 
-    let available_requests = setup.stake_stark_view.get_available_withdrawal_requests(setup.user);
+    let available_requests = setup.stark_stake_view.get_available_withdrawal_requests(setup.user);
     assert(available_requests.len() > 0, 'No available withdrawals');
 
-    cheat_caller_address(setup.stake_stark_contact, setup.user, CheatSpan::TargetCalls(1));
-    setup.stake_stark.withdraw();
+    cheat_caller_address(setup.stark_stake_contact, setup.user, CheatSpan::TargetCalls(1));
+    setup.stark_stake.withdraw(setup.user);
 
     let new_available_requests = setup
-        .stake_stark_view
+        .stark_stake_view
         .get_available_withdrawal_requests(setup.user);
     assert(new_available_requests.len() < available_requests.len(), 'Withdrawal not processed');
     stop_cheat_block_timestamp_global();
@@ -95,13 +95,13 @@ fn test_multiple_deposits_and_withdrawals() {
 
         if counter == 2 {
             // Process batch in the middle
-            cheat_caller_address(setup.stake_stark_contact, setup.admin, CheatSpan::TargetCalls(1));
-            setup.stake_stark.process_batch();
+            cheat_caller_address(setup.stark_stake_contact, setup.admin, CheatSpan::TargetCalls(1));
+            setup.stark_stake.process_batch();
         }
         counter += 1;
     };
 
-    let pending_deposits = setup.stake_stark_view.get_pending_deposits();
+    let pending_deposits = setup.stark_stake_view.get_pending_deposits();
     assert(pending_deposits == deposit_amount * 2, 'Incorrect pending deposits'); // Last 2 deposits
 
     let lst_balance = IERC20Dispatcher { contract_address: setup.lst_address }
@@ -129,8 +129,8 @@ fn test_staggered_withdrawals() {
 
         if counter == 1 {
             // Process batch after second withdrawal request
-            cheat_caller_address(setup.stake_stark_contact, setup.admin, CheatSpan::TargetCalls(1));
-            setup.stake_stark.process_batch();
+            cheat_caller_address(setup.stark_stake_contact, setup.admin, CheatSpan::TargetCalls(1));
+            setup.stark_stake.process_batch();
         }
         counter += 1;
     };
@@ -143,8 +143,8 @@ fn test_staggered_withdrawals() {
 
     let mut withdraw_counter: u8 = 0;
     while withdraw_counter < 2 {
-        cheat_caller_address(setup.stake_stark_contact, setup.user, CheatSpan::TargetCalls(1));
-        setup.stake_stark.withdraw();
+        cheat_caller_address(setup.stark_stake_contact, setup.user, CheatSpan::TargetCalls(1));
+        setup.stark_stake.withdraw(setup.user);
         withdraw_counter += 1;
     };
 
@@ -153,8 +153,8 @@ fn test_staggered_withdrawals() {
 
     withdraw_counter = 0;
     while withdraw_counter < 2 {
-        cheat_caller_address(setup.stake_stark_contact, setup.user, CheatSpan::TargetCalls(1));
-        setup.stake_stark.withdraw();
+        cheat_caller_address(setup.stark_stake_contact, setup.user, CheatSpan::TargetCalls(1));
+        setup.stark_stake.withdraw(setup.user);
         withdraw_counter += 1;
     };
 
@@ -188,8 +188,8 @@ fn test_deposit_withdraw_cycle_with_rewards() {
     start_cheat_block_timestamp_global(get_block_timestamp() + EXIT_WAIT_WINDOW + 1);
 
     process_batch(setup);
-    cheat_caller_address(setup.stake_stark_contact, setup.user, CheatSpan::TargetCalls(1));
-    setup.stake_stark.withdraw();
+    cheat_caller_address(setup.stark_stake_contact, setup.user, CheatSpan::TargetCalls(1));
+    setup.stark_stake.withdraw(setup.user);
 
     // Deposit again
     approve_and_deposit(setup, setup.user, deposit_amount);
@@ -230,8 +230,8 @@ fn test_complex_batch_processing() {
     process_batch(setup);
 
     // Verify final state
-    let pending_deposits = setup.stake_stark_view.get_pending_deposits();
-    let pending_withdrawals = setup.stake_stark_view.get_pending_withdrawals();
+    let pending_deposits = setup.stark_stake_view.get_pending_deposits();
+    let pending_withdrawals = setup.stark_stake_view.get_pending_withdrawals();
     assert(pending_deposits == 0, 'Pending deposits should be 0');
     assert(pending_withdrawals == 0, 'Pending withdrawals should be 0');
 }

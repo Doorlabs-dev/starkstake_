@@ -10,19 +10,19 @@ use snforge_std::{
 use starknet::class_hash::class_hash_const;
 use starknet::testing::{set_caller_address, set_contract_address, set_block_timestamp};
 
-use stakestark_::interfaces::i_stake_stark::{
-    IStakeStark, IStakeStarkDispatcher, IStakeStarkDispatcherTrait, IStakeStarkView,
-    IStakeStarkViewDispatcher, IStakeStarkViewDispatcherTrait
+use starkstake_::interfaces::i_stark_stake::{
+    IStarkStake, IStarkStakeDispatcher, IStarkStakeDispatcherTrait, IStarkStakeView,
+    IStarkStakeViewDispatcher, IStarkStakeViewDispatcherTrait
 };
-use stakestark_::interfaces::i_stSTRK::{IstSTRK, IstSTRKDispatcher, IstSTRKDispatcherTrait};
+use starkstake_::interfaces::i_stSTRK::{IstSTRK, IstSTRKDispatcher, IstSTRKDispatcherTrait};
 use openzeppelin::token::erc20::interface::{IERC20Dispatcher, IERC20DispatcherTrait};
-use stakestark_::contracts::tests::mock::staking::{
+use starkstake_::contracts::tests::mock::staking::{
     IMockStaking, IMockStakingDispatcher, IMockStakingDispatcherTrait
 };
-use stakestark_::contracts::tests::mock::pool::{
+use starkstake_::contracts::tests::mock::pool::{
     IMockPool, IMockPoolDispatcher, IMockPoolDispatcherTrait
 };
-use stakestark_::contracts::tests::mock::strk::{ISTRK, ISTRKDispatcher, ISTRKDispatcherTrait};
+use starkstake_::contracts::tests::mock::strk::{ISTRK, ISTRKDispatcher, ISTRKDispatcherTrait};
 
 // Constants
 const INITIAL_SUPPLY: u256 = 1_000_000_000_000_000_000_000_000; // 1M STRK
@@ -36,9 +36,9 @@ struct TestSetup {
     strk_address: ContractAddress,
     staking: IMockStakingDispatcher,
     pool: IMockPoolDispatcher,
-    stake_stark_contact: ContractAddress,
-    stake_stark: IStakeStarkDispatcher,
-    stake_stark_view: IStakeStarkViewDispatcher,
+    stark_stake_contact: ContractAddress,
+    stark_stake: IStarkStakeDispatcher,
+    stark_stake_view: IStarkStakeViewDispatcher,
     lst_address: ContractAddress,
     lst: IstSTRKDispatcher,
     user: ContractAddress,
@@ -85,10 +85,10 @@ fn init_deploy() -> TestSetup {
     let pool = IMockPoolDispatcher { contract_address: pool_contract };
 
     // Deploy liquid staking contract
-    let (stake_stark_contact, stake_stark, stake_stark_view) = deploy_stake_stark(
+    let (stark_stake_contact, stark_stake, stark_stake_view) = deploy_stark_stake(
         strk_contract, pool_contract
     );
-    let lst_address = stake_stark_view.get_lst_address();
+    let lst_address = stark_stake_view.get_lst_address();
     let lst = IstSTRKDispatcher{contract_address: lst_address};
     let fee_recipient = starknet::contract_address_const::<'fee_recipient'>();
 
@@ -100,9 +100,9 @@ fn init_deploy() -> TestSetup {
         strk_address: strk_contract,
         staking,
         pool,
-        stake_stark_contact,
-        stake_stark,
-        stake_stark_view,
+        stark_stake_contact,
+        stark_stake,
+        stark_stake_view,
         lst_address,
         lst,
         user,
@@ -143,10 +143,10 @@ fn deploy_mock_staking(strk_address: ContractAddress) -> (ContractAddress, IMock
 }
 
 // Helper function to deploy liquid staking contract
-fn deploy_stake_stark(
+fn deploy_stark_stake(
     strk_address: ContractAddress, pool_contract: ContractAddress
-) -> (ContractAddress, IStakeStarkDispatcher, IStakeStarkViewDispatcher) {
-    let contract = declare("StakeStark").unwrap().contract_class();
+) -> (ContractAddress, IStarkStakeDispatcher, IStarkStakeViewDispatcher) {
+    let contract = declare("StarkStake").unwrap().contract_class();
     let delegator = declare("Delegator").unwrap().contract_class();
     let stSTRK = declare("stSTRK").unwrap().contract_class();
 
@@ -171,8 +171,8 @@ fn deploy_stake_stark(
 
     (
         contract_address,
-        IStakeStarkDispatcher { contract_address },
-        IStakeStarkViewDispatcher { contract_address }
+        IStarkStakeDispatcher { contract_address },
+        IStarkStakeViewDispatcher { contract_address }
     )
 }
 
@@ -180,7 +180,7 @@ fn check_deployments(setup: TestSetup) {
     assert(setup.strk.contract_address.is_non_zero(), 'STRK not deployed');
     assert(setup.staking.contract_address.is_non_zero(), 'Staking not deployed');
     assert(setup.pool.contract_address.is_non_zero(), 'Pool not deployed');
-    assert(setup.stake_stark.contract_address.is_non_zero(), 'StakeStark not deployed');
+    assert(setup.stark_stake.contract_address.is_non_zero(), 'StarkStake not deployed');
     assert(setup.lst_address.is_non_zero(), 'LST not deployed');
 }
 
@@ -191,10 +191,10 @@ fn approve_and_deposit(
     amount: u256
 ) -> u256 {
     cheat_caller_address(setup.strk_address, user, CheatSpan::TargetCalls(1));
-    setup.strk.approve(setup.stake_stark_contact, amount);
+    setup.strk.approve(setup.stark_stake_contact, amount);
 
-    cheat_caller_address(setup.stake_stark_contact, user, CheatSpan::TargetCalls(1));
-    setup.stake_stark.deposit(amount, user, user)
+    cheat_caller_address(setup.stark_stake_contact, user, CheatSpan::TargetCalls(1));
+    setup.stark_stake.deposit(amount, user, user)
 }
 
 fn approve_and_deposit_in_stSTRK(
@@ -203,7 +203,7 @@ fn approve_and_deposit_in_stSTRK(
     amount: u256
 ) -> u256 {
     cheat_caller_address(setup.strk_address, user, CheatSpan::TargetCalls(1));
-    setup.strk.approve(setup.stake_stark_contact, amount);
+    setup.strk.approve(setup.stark_stake_contact, amount);
 
     cheat_caller_address(setup.lst_address, user, CheatSpan::TargetCalls(1));
     setup.lst.deposit(amount, user)
@@ -214,11 +214,11 @@ fn request_withdrawal(
     user: ContractAddress, 
     shares: u256
 ) {
-    cheat_caller_address(setup.stake_stark_contact, user, CheatSpan::TargetCalls(1));
-    setup.stake_stark.request_withdrawal(shares)
+    cheat_caller_address(setup.stark_stake_contact, user, CheatSpan::TargetCalls(1));
+    setup.stark_stake.request_withdrawal(shares, user)
 }
 
 fn process_batch(setup: TestSetup){
-    cheat_caller_address(setup.stake_stark_contact, setup.admin, CheatSpan::TargetCalls(1));
-    setup.stake_stark.process_batch();
+    cheat_caller_address(setup.stark_stake_contact, setup.admin, CheatSpan::TargetCalls(1));
+    setup.stark_stake.process_batch();
 }

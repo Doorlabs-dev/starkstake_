@@ -1,7 +1,7 @@
 
-# stakestark_
+# starkstake_
 
-stakestark_ is a liquid staking protocol built on Starknet. It enables users to stake STRK tokens and receive liquid staking tokens (stSTRK) in return. These tokens can be traded, used in DeFi, or redeemed for the underlying STRK tokens after a withdrawal request.
+starkstake_ is a liquid staking protocol built on Starknet. It enables users to stake STRK tokens and receive liquid staking tokens (stSTRK) in return. These tokens can be traded, used in DeFi, or redeemed for the underlying STRK tokens after a withdrawal request.
 
 ## Project Structure
 
@@ -19,18 +19,18 @@ stakestark_ is a liquid staking protocol built on Starknet. It enables users to 
     ├── contracts
     │   ├── delegator.cairo    # Delegator contract for managing validator delegation
     │   ├── stSTRK.cairo       # Liquid staking token (stSTRK) contract
-    │   ├── stake_stark.cairo  # Main liquid staking protocol contract
+    │   ├── stark_stake.cairo  # Main liquid staking protocol contract
     │   └── tests
     │       ├── mock
     │       │   ├── pool.cairo # Mock pool contract for testing
     │       │   ├── staking.cairo
     │       │   └── strk.cairo
-    │       ├── stake_stark_test.cairo # Unit tests for stake_stark contract
+    │       ├── stark_stake_test.cairo # Unit tests for stark_stake contract
     │       └── unit_test.cairo
     ├── interfaces
     │   ├── i_delegator.cairo   # Interface for the Delegator contract
     │   ├── i_stSTRK.cairo      # Interface for stSTRK contract
-    │   ├── i_stake_stark.cairo # Interface for the StakeStark contract
+    │   ├── i_stark_stake.cairo # Interface for the StarkStake contract
     │   └── i_starknet_staking.cairo # Interface for Starknet staking pool
     ├── lib.cairo
     └── utils
@@ -39,7 +39,7 @@ stakestark_ is a liquid staking protocol built on Starknet. It enables users to 
 
 ## Core Contracts
 
-- **StakeStark**: The main contract managing the liquid staking process. Users can deposit STRK tokens and request withdrawals.
+- **StarkStake**: The main contract managing the liquid staking process. Users can deposit STRK tokens and request withdrawals.
 - **stSTRK**: The liquid staking token representing a user's share in the protocol. It rebases based on the rewards distributed.
 - **Delegator**: Manages the delegation of tokens to the Starknet staking pool and handles rewards collection and withdrawal requests.
 
@@ -47,7 +47,7 @@ stakestark_ is a liquid staking protocol built on Starknet. It enables users to 
 
 1. Clone the repository:
    ```bash
-   git clone https://github.com/Doorlabs-dev/stakestark_
+   git clone https://github.com/Doorlabs-dev/starkstake_
    ```
 
 2. Install dependencies:

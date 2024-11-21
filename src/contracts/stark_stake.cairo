@@ -1,5 +1,5 @@
 #[starknet::contract]
-mod StakeStark {
+mod StarkStake {
     use core::num::traits::Bounded;
     use core::array::ArrayTrait;
     use starknet::{
@@ -15,16 +15,16 @@ mod StakeStark {
     use openzeppelin_introspection::src5::SRC5Component;
     use openzeppelin::token::erc20::interface::{IERC20Dispatcher, IERC20DispatcherTrait};
 
-    use stakestark_::components::access_control::RoleBasedAccessControlComponent;
+    use starkstake_::components::access_control::RoleBasedAccessControlComponent;
 
-    use stakestark_::interfaces::{
-        i_stake_stark::Events, i_stake_stark::IStakeStark, i_stake_stark::IStakeStarkView,
-        i_stake_stark::WithdrawalRequest, i_stSTRK::IstSTRKDispatcher,
+    use starkstake_::interfaces::{
+        i_stark_stake::Events, i_stark_stake::IStarkStake, i_stark_stake::IStarkStakeView,
+        i_stark_stake::WithdrawalRequest, i_stSTRK::IstSTRKDispatcher,
         i_stSTRK::IstSTRKDispatcherTrait, i_delegator::IDelegatorDispatcher,
         i_delegator::IDelegatorDispatcherTrait,
     };
 
-    use stakestark_::utils::constants::{
+    use starkstake_::utils::constants::{
         ADMIN_ROLE, ONE_DAY, OPERATOR_ROLE, PAUSER_ROLE, UPGRADER_ROLE
     };
 
@@ -147,7 +147,7 @@ mod StakeStark {
     }
 
     #[abi(embed_v0)]
-    impl StakeStarkImpl of IStakeStark<ContractState> {
+    impl StarkStakeImpl of IStarkStake<ContractState> {
         /// Deposits STRK tokens and mints corresponding LS tokens.
         ///
         /// # Arguments
@@ -171,6 +171,8 @@ mod StakeStark {
             //set user to caller when caller is stSTRK
             if caller == self.stSTRK.read() {
                 caller = user
+            } else {
+                assert(user == caller, 'user must be a caller')
             }
 
             let strk_dispatcher = IERC20Dispatcher { contract_address: self.strk_token.read() };
@@ -212,7 +214,9 @@ mod StakeStark {
             //set user to caller when caller is stSTRK
             if caller == self.stSTRK.read() {
                 caller = user
-            };
+            } else {
+                assert(user == caller, 'user must be a caller')
+            }
 
             let (assets, withdrawal_time) = self._process_withdrawal_request(shares, caller);
 
@@ -241,6 +245,8 @@ mod StakeStark {
             //set user to caller when caller is stSTRK
             if caller == self.stSTRK.read() {
                 caller = user
+            } else {
+                assert(user == caller, 'user must be a caller')
             }
 
             let total_assets_to_withdraw = self._process_withdrawals(caller);
@@ -884,7 +890,7 @@ mod StakeStark {
     }
 
     #[abi(embed_v0)]
-    impl StakeStarkViewImpl of IStakeStarkView<ContractState> {
+    impl StarkStakeViewImpl of IStarkStakeView<ContractState> {
         /// Returns the address of the Liquid Staking Token (LST) contract.
         ///
         /// # Returns

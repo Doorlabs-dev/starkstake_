@@ -1,5 +1,5 @@
 // Constants for roles
-//use stakestark_::utils::constants::{ADMIN_ROLE, LIQUID_STAKING_ROLE, MINTER_ROLE, PAUSER_ROLE,
+//use starkstake_::utils::constants::{ADMIN_ROLE, LIQUID_STAKING_ROLE, MINTER_ROLE, PAUSER_ROLE,
 //UPGRADER_ROLE, VALIDATOR_ROLE};
 //hex(int.from_bytes(Web3.keccak(text="ADMIN_ROLE"), "big") & mask_250)
 const ADMIN_ROLE: felt252 = 0x9807205ce4d355092ef5a8a18f56e8913cf4a201fbe287825b095693c21775;

@@ -6,13 +6,13 @@ use snforge_std::{
     cheat_caller_address, CheatSpan, start_cheat_block_timestamp_global,
     stop_cheat_block_timestamp_global
 };
-use stakestark_::interfaces::i_stake_stark::{
-    IStakeStark, IStakeStarkDispatcher, IStakeStarkDispatcherTrait, IStakeStarkView,
-    IStakeStarkViewDispatcher, IStakeStarkViewDispatcherTrait
+use starkstake_::interfaces::i_stark_stake::{
+    IStarkStake, IStarkStakeDispatcher, IStarkStakeDispatcherTrait, IStarkStakeView,
+    IStarkStakeViewDispatcher, IStarkStakeViewDispatcherTrait
 };
-use stakestark_::interfaces::i_stSTRK::{IstSTRK, IstSTRKDispatcher, IstSTRKDispatcherTrait};
+use starkstake_::interfaces::i_stSTRK::{IstSTRK, IstSTRKDispatcher, IstSTRKDispatcherTrait};
 use openzeppelin::token::erc20::interface::{IERC20Dispatcher, IERC20DispatcherTrait};
-use stakestark_::contracts::tests::mock::strk::{ISTRK, ISTRKDispatcher, ISTRKDispatcherTrait};
+use starkstake_::contracts::tests::mock::strk::{ISTRK, ISTRKDispatcher, ISTRKDispatcherTrait};
 use starknet::get_block_timestamp;
 
 #[test]
@@ -35,8 +35,8 @@ fn test_full_stake_unstake_cycle() {
 
     // 5. Withdraw
     let initial_balance = setup.strk.balance_of(setup.user);
-    cheat_caller_address(setup.stake_stark_contact, setup.user, CheatSpan::TargetCalls(1));
-    setup.stake_stark.withdraw();
+    cheat_caller_address(setup.stark_stake_contact, setup.user, CheatSpan::TargetCalls(1));
+    setup.stark_stake.withdraw(setup.user);
 
     // 6. Verify final state
     let final_balance = setup.strk.balance_of(setup.user);

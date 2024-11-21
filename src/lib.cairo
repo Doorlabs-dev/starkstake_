@@ -4,9 +4,13 @@ mod components {
 mod contracts {
     mod tests {
         #[cfg(test)]
-        mod stake_stark_test;
+        mod test_utils;
         #[cfg(test)]
-        mod unit_test;
+        mod stark_stake_test;
+        #[cfg(test)]
+        mod stSTRK_test;        
+        #[cfg(test)]
+        mod integration_test;
 
         mod mock {
             mod pool;
@@ -15,12 +19,12 @@ mod contracts {
         }
     }
     mod delegator;
-    mod stake_stark;
+    mod stark_stake;
     mod stSTRK;
 }
 mod interfaces {
     mod i_delegator;
-    mod i_stake_stark;
+    mod i_stark_stake;
     mod i_stSTRK;
     mod i_starknet_staking;
 }

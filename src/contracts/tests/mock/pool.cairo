@@ -66,7 +66,7 @@ pub mod MockPool {
     use starknet::{
         ContractAddress, get_caller_address, get_block_timestamp, get_contract_address
     };
-    use stakestark_::contracts::tests::mock::strk::{ISTRKDispatcher, ISTRKDispatcherTrait};
+    use starkstake_::contracts::tests::mock::strk::{ISTRKDispatcher, ISTRKDispatcherTrait};
     use super::{PoolMemberInfo, PoolContractInfo};
 
     #[storage]
