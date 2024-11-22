@@ -2,7 +2,7 @@
 // Compatible with OpenZeppelin Contracts for Cairo ^0.19.0
 
 #[starknet::contract]
-mod StakedSTRK {
+mod StakedStrkToken {
     use openzeppelin::access::ownable::OwnableComponent;
     use openzeppelin::security::pausable::PausableComponent;
     use openzeppelin::token::erc20::ERC20Component;
