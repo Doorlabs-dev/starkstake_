@@ -539,7 +539,9 @@ mod StarkStake {
                 .write((caller, request_id), WithdrawalRequest { assets, withdrawal_time });
 
             // burn
-            staked_strk_token.transfer_from(caller, Zeroable::zero(), shares);
+            staked_strk_token.transfer_from(caller, get_contract_address(), shares);
+            IStakedStrkTokenDispatcher {contract_address: self.staked_strk_token.read()}.burn(shares);
+            
             //change total assets for exchange ratio
             self.total_assets.write(self.total_assets.read() - assets);
             
