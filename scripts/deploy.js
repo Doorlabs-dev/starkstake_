@@ -4,7 +4,7 @@ const fs = require("fs");
 // Load environment variables
 require("dotenv").config();
 
-const LST_PATH = "target/dev/starkstake__stSTRK.contract_class.json";
+const LST_PATH = "target/dev/starkstake__StakedStrkToken.contract_class.json";
 const LIQUID_STAKING_PATH = "target/dev/starkstake__StarkStake.contract_class.json";
 const DELEGATOR_PATH = "target/dev/starkstake__Delegator.contract_class.json";
 
