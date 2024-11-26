@@ -280,19 +280,15 @@ mod StarkStake {
             self.reentrancy_guard.end();
         }
 
-        /// Burns shares from owner and sends exact assets token to receiver
+        /// Sends assets token to caller
         ///
-        /// # Arguments
-        ///
-        /// * `assets` - Amount of assets to withdraw
-        /// * `receiver` - Address that will receive the assets
-        /// * `owner` - Address of the owner of the shares
         ///
         /// # Returns
         ///
-        /// The amount of shares burned
+        /// The amount of assets sent
+        /// // TODO: mod to fit with ERC7540 standard
         fn withdraw(
-            ref self: ContractState, assets: u256, receiver: ContractAddress, owner: ContractAddress
+            ref self: ContractState
         ) -> u256 {
             // combined with staked_strk_token contract's withdraw funcion and stark_stake's withdraw function
             // some modificaion needed
@@ -300,70 +296,19 @@ mod StarkStake {
             self.reentrancy_guard.start();
 
             let caller = get_caller_address();
-            let shares = self.convert_to_shares(assets);
-
-            if caller != owner {
-                let allowed = IERC20Dispatcher {
-                    contract_address: self.staked_strk_token.read()
-                }.allowance(owner, caller);
-                assert(allowed >= shares, 'EXCEED_ALLOWANCE');
-            }
 
             let total_assets_to_withdraw = self._process_withdrawals(caller);
 
             assert(total_assets_to_withdraw > 0, 'No withdrawable requests');
 
-            // TODO: mod to fit with ERC7540 standard
+            
             let strk_token = IERC20Dispatcher { contract_address: self.strk_token.read() };
             strk_token.transfer(caller, total_assets_to_withdraw);
 
-            self.emit(Events::Withdraw { sender: caller, receiver, owner, assets, shares });
+            self.emit(Events::Withdraw { sender: caller, assets: total_assets_to_withdraw });
 
             self.reentrancy_guard.end();
-            shares
-        }
-
-
-        /// Burns exact amount of shares from owner and sends assets to receiver
-        ///
-        /// # Arguments
-        ///
-        /// * `shares` - Amount of shares to redeem
-        /// * `receiver` - Address that will receive the assets
-        /// * `owner` - Address of the owner of the shares
-        ///
-        /// # Returns
-        ///
-        /// The amount of assets withdrawn
-        fn redeem(
-            ref self: ContractState, shares: u256, receiver: ContractAddress, owner: ContractAddress
-        ) -> u256 {
-            // combined with staked_strk_token contract's withdraw funcion and stark_stake's withdraw function
-            // some modificaion needed
-            self.pausable.assert_not_paused();
-            self.reentrancy_guard.start();
-
-            let assets = self.preview_redeem(shares);
-
-            let caller = get_caller_address();
-            if caller != owner {
-                let allowed = IERC20Dispatcher {
-                    contract_address: self.staked_strk_token.read()
-                }.allowance(owner, caller);
-                assert(allowed >= shares, 'EXCEED_ALLOWANCE');
-            }
-
-            let total_assets_to_withdraw = self._process_withdrawals(caller);
-
-            assert(total_assets_to_withdraw > 0, 'No withdrawable requests');
-
-            let strk_token = IERC20Dispatcher { contract_address: self.strk_token.read() };
-            strk_token.transfer(caller, total_assets_to_withdraw);
-
-            self.emit(Events::Withdraw { sender: caller, receiver, owner, assets, shares });
-
-            self.reentrancy_guard.end();
-            assets
+            total_assets_to_withdraw
         }
 
 

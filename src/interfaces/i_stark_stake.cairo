@@ -38,12 +38,7 @@ mod Events {
     struct Withdraw {
         #[key]
         sender: ContractAddress,
-        #[key]
-        receiver: ContractAddress,
-        #[key]
-        owner: ContractAddress,
-        assets: u256,
-        shares: u256
+        assets: u256
     }
 
     #[derive(Drop, starknet::Event)]
@@ -112,12 +107,7 @@ trait IStarkStake<TContractState> {
     fn deposit(ref self: TContractState, assets: u256, receiver: ContractAddress) -> u256;
     fn mint(ref self: TContractState, shares: u256, receiver: ContractAddress) -> u256;
     fn request_withdrawal(ref self: TContractState, shares: u256);
-    fn withdraw(
-        ref self: TContractState, assets: u256, receiver: ContractAddress, owner: ContractAddress
-    ) -> u256;
-    fn redeem(
-        ref self: TContractState, shares: u256, receiver: ContractAddress, owner: ContractAddress
-    ) -> u256;
+    fn withdraw(ref self: TContractState) -> u256;
     fn process_batch(ref self: TContractState);
 
     fn rebase(ref self: TContractState, new_total_assets: u256);
