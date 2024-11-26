@@ -14,7 +14,7 @@ use starkstake_::interfaces::i_stark_stake::{
     IStarkStake, IStarkStakeDispatcher, IStarkStakeDispatcherTrait, IStarkStakeView,
     IStarkStakeViewDispatcher, IStarkStakeViewDispatcherTrait
 };
-use starkstake_::interfaces::i_stSTRK::{IstSTRK, IstSTRKDispatcher, IstSTRKDispatcherTrait};
+use starkstake_::interfaces::i_staked_strk_token::{IStakedStrkToken, IStakedStrkTokenDispatcher, IStakedStrkTokenDispatcherTrait};
 use openzeppelin::token::erc20::interface::{IERC20Dispatcher, IERC20DispatcherTrait};
 use starkstake_::contracts::tests::mock::staking::{
     IMockStaking, IMockStakingDispatcher, IMockStakingDispatcherTrait
@@ -40,7 +40,7 @@ struct TestSetup {
     stark_stake: IStarkStakeDispatcher,
     stark_stake_view: IStarkStakeViewDispatcher,
     lst_address: ContractAddress,
-    lst: IstSTRKDispatcher,
+    lst: IStakedStrkTokenDispatcher,
     user: ContractAddress,
     admin: ContractAddress,
     fee_recipient: ContractAddress
@@ -88,8 +88,8 @@ fn init_deploy() -> TestSetup {
     let (stark_stake_contact, stark_stake, stark_stake_view) = deploy_stark_stake(
         strk_contract, pool_contract
     );
-    let lst_address = stark_stake_view.get_lst_address();
-    let lst = IstSTRKDispatcher{contract_address: lst_address};
+    let lst_address = stark_stake_view.get_stSTRK_address();
+    let lst = IStakedStrkTokenDispatcher{contract_address: lst_address};
     let fee_recipient = starknet::contract_address_const::<'fee_recipient'>();
 
     // Mint some STRK to the user for testing
@@ -148,7 +148,7 @@ fn deploy_stark_stake(
 ) -> (ContractAddress, IStarkStakeDispatcher, IStarkStakeViewDispatcher) {
     let contract = declare("StarkStake").unwrap().contract_class();
     let delegator = declare("Delegator").unwrap().contract_class();
-    let stSTRK = declare("stSTRK").unwrap().contract_class();
+    let staked_strk_token = declare("StakedStrkToken").unwrap().contract_class();
 
     let admin = starknet::contract_address_const::<'admin'>();
     let initial_platform_fee: u16 = 500; // 5%
@@ -160,7 +160,7 @@ fn deploy_stark_stake(
     pool_contract.serialize(ref calldata);
     delegator.class_hash.serialize(ref calldata);
     22.serialize(ref calldata);
-    stSTRK.class_hash.serialize(ref calldata);
+    staked_strk_token.class_hash.serialize(ref calldata);
     initial_platform_fee.serialize(ref calldata);
     platform_fee_recipient.serialize(ref calldata);
     initial_withdrawal_window_period.serialize(ref calldata);
@@ -194,28 +194,19 @@ fn approve_and_deposit(
     setup.strk.approve(setup.stark_stake_contact, amount);
 
     cheat_caller_address(setup.stark_stake_contact, user, CheatSpan::TargetCalls(1));
-    setup.stark_stake.deposit(amount, user, user)
+    setup.stark_stake.deposit(amount, user)
 }
 
-fn approve_and_deposit_in_stSTRK(
-    setup: TestSetup, 
-    user: ContractAddress, 
-    amount: u256
-) -> u256 {
-    cheat_caller_address(setup.strk_address, user, CheatSpan::TargetCalls(1));
-    setup.strk.approve(setup.stark_stake_contact, amount);
-
-    cheat_caller_address(setup.lst_address, user, CheatSpan::TargetCalls(1));
-    setup.lst.deposit(amount, user)
-}
-
-fn request_withdrawal(
+fn approve_and_request_withdrawal(
     setup: TestSetup, 
     user: ContractAddress, 
     shares: u256
 ) {
+    cheat_caller_address(setup.lst_address, user, CheatSpan::TargetCalls(1));
+    IERC20Dispatcher {contract_address: setup.lst_address}.approve(setup.stark_stake_contact, shares);
+
     cheat_caller_address(setup.stark_stake_contact, user, CheatSpan::TargetCalls(1));
-    setup.stark_stake.request_withdrawal(shares, user)
+    setup.stark_stake.request_withdrawal(shares)
 }
 
 fn process_batch(setup: TestSetup){

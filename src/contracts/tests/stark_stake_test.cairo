@@ -1,5 +1,5 @@
 use super::test_utils::{
-    TestSetup, setup, EXIT_WAIT_WINDOW, request_withdrawal, approve_and_deposit, process_batch
+    TestSetup, setup, EXIT_WAIT_WINDOW, approve_and_request_withdrawal, approve_and_deposit, process_batch
 };
 
 use core::array::ArrayTrait;
@@ -14,7 +14,7 @@ use starkstake_::interfaces::i_stark_stake::{
     IStarkStake, IStarkStakeDispatcher, IStarkStakeDispatcherTrait, IStarkStakeView,
     IStarkStakeViewDispatcher, IStarkStakeViewDispatcherTrait
 };
-use starkstake_::interfaces::i_stSTRK::{IstSTRK, IstSTRKDispatcher, IstSTRKDispatcherTrait};
+use starkstake_::interfaces::i_staked_strk_token::{IStakedStrkToken, IStakedStrkTokenDispatcher, IStakedStrkTokenDispatcherTrait};
 use openzeppelin::token::erc20::interface::{IERC20Dispatcher, IERC20DispatcherTrait};
 
 use starkstake_::contracts::tests::mock::strk::{ISTRK, ISTRKDispatcher, ISTRKDispatcherTrait};
@@ -45,7 +45,7 @@ fn test_deposit(setup: TestSetup) {
 fn test_request_withdrawal(setup: TestSetup) {
     let withdrawal_shares: u256 = 25_000_000_000_000_000_000; // 25 STRK worth of shares
 
-    request_withdrawal(setup, setup.user, withdrawal_shares);
+    approve_and_request_withdrawal(setup, setup.user, withdrawal_shares);
 
     let pending_withdrawals = setup.stark_stake_view.get_pending_withdrawals();
     assert(pending_withdrawals > 0, 'No pending withdrawals');
@@ -72,7 +72,7 @@ fn test_withdraw(setup: TestSetup) {
     assert(available_requests.len() > 0, 'No available withdrawals');
 
     cheat_caller_address(setup.stark_stake_contact, setup.user, CheatSpan::TargetCalls(1));
-    setup.stark_stake.withdraw(setup.user);
+    setup.stark_stake.withdraw();
 
     let new_available_requests = setup
         .stark_stake_view
@@ -125,7 +125,7 @@ fn test_staggered_withdrawals() {
     let withdrawal_shares = total_shares / 4; // 25% each time
     let mut counter: u8 = 0;
     while counter < 4 {
-        request_withdrawal(setup, setup.user, withdrawal_shares);
+        approve_and_request_withdrawal(setup, setup.user, withdrawal_shares);
 
         if counter == 1 {
             // Process batch after second withdrawal request
@@ -144,7 +144,7 @@ fn test_staggered_withdrawals() {
     let mut withdraw_counter: u8 = 0;
     while withdraw_counter < 2 {
         cheat_caller_address(setup.stark_stake_contact, setup.user, CheatSpan::TargetCalls(1));
-        setup.stark_stake.withdraw(setup.user);
+        setup.stark_stake.withdraw();
         withdraw_counter += 1;
     };
 
@@ -154,7 +154,7 @@ fn test_staggered_withdrawals() {
     withdraw_counter = 0;
     while withdraw_counter < 2 {
         cheat_caller_address(setup.stark_stake_contact, setup.user, CheatSpan::TargetCalls(1));
-        setup.stark_stake.withdraw(setup.user);
+        setup.stark_stake.withdraw();
         withdraw_counter += 1;
     };
 
@@ -179,7 +179,7 @@ fn test_deposit_withdraw_cycle_with_rewards() {
 
     // Request partial withdrawal
     let withdrawal_shares = total_shares / 2;
-    request_withdrawal(setup, setup.user, withdrawal_shares);
+    approve_and_request_withdrawal(setup, setup.user, withdrawal_shares);
 
     // Process withdrawal request
     process_batch(setup);
@@ -189,7 +189,7 @@ fn test_deposit_withdraw_cycle_with_rewards() {
 
     process_batch(setup);
     cheat_caller_address(setup.stark_stake_contact, setup.user, CheatSpan::TargetCalls(1));
-    setup.stark_stake.withdraw(setup.user);
+    setup.stark_stake.withdraw();
 
     // Deposit again
     approve_and_deposit(setup, setup.user, deposit_amount);
@@ -214,7 +214,7 @@ fn test_complex_batch_processing() {
     let withdrawal_shares = total_shares / 3;
     counter = 0;
     while counter < 2 {
-        request_withdrawal(setup, setup.user, withdrawal_shares);
+        approve_and_request_withdrawal(setup, setup.user, withdrawal_shares);
         counter += 1;
     };
 
@@ -224,7 +224,7 @@ fn test_complex_batch_processing() {
     // More deposits and withdrawals
     let new_shares = approve_and_deposit(setup, setup.user, deposit_amount);
 
-    request_withdrawal(setup, setup.user, new_shares);
+    approve_and_request_withdrawal(setup, setup.user, new_shares);
 
     // Process again
     process_batch(setup);

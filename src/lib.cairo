@@ -6,9 +6,7 @@ mod contracts {
         #[cfg(test)]
         mod test_utils;
         #[cfg(test)]
-        mod stark_stake_test;
-        #[cfg(test)]
-        mod stSTRK_test;        
+        mod stark_stake_test;      
         #[cfg(test)]
         mod integration_test;
 
