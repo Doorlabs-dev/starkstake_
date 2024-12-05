@@ -92,6 +92,7 @@ mod StakedStrkToken {
         }
 
         fn burn(ref self: ContractState, value: u256) {
+            self.ownable.assert_only_owner();
             self.erc20.burn(get_caller_address(), value);
         }
 
