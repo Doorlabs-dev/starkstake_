@@ -216,37 +216,8 @@ mod StarkStake {
             self.reentrancy_guard.start();
 
             let assets = self.preview_mint(shares);
-            assert(assets != 0, 'ZERO_ASSETS');
-
-            assert(assets >= self.min_deposit_amount.read(), 'Deposit amount too low');
-
-            let caller = get_caller_address();
-
-            let strk_dispatcher = IERC20Dispatcher { contract_address: self.strk_token.read() };
-            let staked_strk_token = IStakedStrkTokenDispatcher {
-                contract_address: self.staked_strk_token.read()
-            };
-
-            // Transfer STRK tokens from caller to this contract
-            assert(
-                strk_dispatcher.transfer_from(caller, get_contract_address(), assets),
-                'Transfer failed'
-            );
-
-            // Mint LS tokens to the user
-            let shares = self.preview_deposit(assets);
-            staked_strk_token.mint(receiver, shares);
-
-            assert(shares > 0, 'No shares minted');
-
-            self._add_deposit_to_queue(assets);
-
-            // Update total assets
-            self.total_assets.write(self.total_assets.read() + assets);
-
-            self.emit(Events::Deposit { sender: caller, owner: receiver, assets, shares });
-
-            self.reentrancy_guard.end();
+            
+            self.deposit(assets, receiver);
 
             assets
         }
@@ -1210,6 +1181,9 @@ mod StarkStake {
 
             loop {
                 let request = self.withdrawal_requests.read((user, request_id));
+                if request.assets == 0 {
+                    break;
+                }
                 if request.assets > 0 && current_time >= request.withdrawal_time {
                     total_withdrawable += request.assets;
                 }
@@ -1245,6 +1219,9 @@ mod StarkStake {
 
             loop {
                 let request = self.withdrawal_requests.read((user, request_id));
+                if request.assets == 0 {
+                    break;
+                }
                 if request.assets > 0 {
                     requests.append(request);
                 }
