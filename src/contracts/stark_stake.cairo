@@ -66,6 +66,7 @@ mod StarkStake {
         delegator_status: Map<u8, (bool, u64)>, // (available_time)
         withdrawal_requests: Map<(ContractAddress, u32), WithdrawalRequest>,
         next_withdrawal_request_id: Map<ContractAddress, u32>,
+        pending_withdrawal_request_id: Map<ContractAddress, u32>, 
         delegator_class_hash: ClassHash,
         platform_fee_recipient: ContractAddress,
         min_deposit_amount: u256,
@@ -531,23 +532,19 @@ mod StarkStake {
             let mut total_assets_to_withdraw: u256 = 0;
 
             let requests = self.get_available_withdrawal_requests(caller);
+            let mut last_processed_id: u32 = 0;
 
             for (
                 request_id, request
             ) in requests {
-                //let request = self.withdrawal_requests.read((caller, request_id));
                 assert(request.assets > 0, 'Invalid request ID');
                 assert(current_time >= request.withdrawal_time, 'Request not ready');
 
                 total_assets_to_withdraw += request.assets;
 
-                // Clear the processed request
-                self
-                    .withdrawal_requests
-                    .write(
-                        (caller, request_id), WithdrawalRequest { assets: 0, withdrawal_time: 0 }
-                    );
+                if last_processed_id < request_id { last_processed_id = request_id }; 
             };
+            self.pending_withdrawal_request_id.write(caller, last_processed_id);
 
             total_assets_to_withdraw
         }
@@ -1172,25 +1169,23 @@ mod StarkStake {
             let current_time = get_block_timestamp();
             let mut total_withdrawable = 0_u256;
             let next_withdrawal_request_id = self.next_withdrawal_request_id.read(user);
+            let pending_withdrawal_request_id = self.pending_withdrawal_request_id.read(user);
 
-            let mut request_id = if next_withdrawal_request_id > 0 {
-                next_withdrawal_request_id - 1
+            let mut request_id = if next_withdrawal_request_id != pending_withdrawal_request_id {
+                pending_withdrawal_request_id
             } else {
                 return total_withdrawable;
             };
 
             loop {
                 let request = self.withdrawal_requests.read((user, request_id));
-                if request.assets == 0 {
-                    break;
-                }
-                if request.assets > 0 && current_time >= request.withdrawal_time {
+                if current_time >= request.withdrawal_time {
                     total_withdrawable += request.assets;
                 }
-                if request_id == 0 {
+                if request_id == next_withdrawal_request_id - 1 {
                     break;
                 }
-                request_id -= 1;
+                request_id += 1;
             };
 
             total_withdrawable
@@ -1210,25 +1205,23 @@ mod StarkStake {
         ) -> Array<WithdrawalRequest> {
             let mut requests = ArrayTrait::new();
             let next_withdrawal_request_id = self.next_withdrawal_request_id.read(user);
+            let pending_withdrawal_request_id = self.pending_withdrawal_request_id.read(user);
 
-            let mut request_id = if next_withdrawal_request_id > 0 {
-                next_withdrawal_request_id - 1
+            let mut request_id = if next_withdrawal_request_id != pending_withdrawal_request_id {
+                pending_withdrawal_request_id
             } else {
                 return requests;
             };
 
             loop {
                 let request = self.withdrawal_requests.read((user, request_id));
-                if request.assets == 0 {
+                
+                requests.append(request);
+                
+                if request_id == next_withdrawal_request_id - 1 {
                     break;
                 }
-                if request.assets > 0 {
-                    requests.append(request);
-                }
-                if request_id == 0 {
-                    break;
-                }
-                request_id -= 1;
+                request_id += 1;
             };
 
             requests
@@ -1249,25 +1242,23 @@ mod StarkStake {
             let mut available_requests = ArrayTrait::new();
             let current_time = get_block_timestamp();
             let next_withdrawal_request_id = self.next_withdrawal_request_id.read(user);
+            let pending_withdrawal_request_id = self.pending_withdrawal_request_id.read(user);
 
-            let mut request_id = if next_withdrawal_request_id > 0 {
-                next_withdrawal_request_id - 1
+            let mut request_id = if next_withdrawal_request_id != pending_withdrawal_request_id {
+                pending_withdrawal_request_id
             } else {
                 return available_requests;
             };
 
             loop {
                 let request = self.withdrawal_requests.read((user, request_id));
-                if request.assets == 0 {
-                    break;
-                }
                 if current_time >= request.withdrawal_time {
                     available_requests.append((request_id, request));
                 }
-                if request_id == 0 {
+                if request_id == next_withdrawal_request_id - 1 {
                     break;
                 }
-                request_id -= 1;
+                request_id += 1;
             };
 
             available_requests
