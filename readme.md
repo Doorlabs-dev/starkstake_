@@ -1,13 +1,13 @@
-# StarkStake 🪙
+# starkstake_ 🪙
 
-Welcome to **StarkStake**, a cutting-edge liquid staking protocol built on StarkNet. This repository contains the core contracts and deployment scripts to facilitate decentralized and efficient staking, liquid staking token issuance, and delegator management.
+Welcome to **starkstake_**, a cutting-edge liquid staking protocol built on Starknet. This repository contains the core contracts and deployment scripts to facilitate decentralized and efficient staking, liquid staking token issuance, and delegator management.
 
 ---
 
 ## Features ✨
 
 - **Liquid Staking**: Stake your STRK tokens and receive `stSTRK`, a liquid staking token (LST) compliant with ERC-20 standards.
-- **Delegator Management**: Interact with StarkNet's staking pool through 22 dynamically managed delegator contracts.
+- **Delegator Management**: Interact with Starknet's staking pool through 22 dynamically managed delegator contracts.
 - **Modular Architecture**: Built with extensibility and security in mind using OpenZeppelin components.
 - **Reward Distribution**: Automated reward distribution with customizable fee ratios.
 - **Upgradable Contracts**: Upgradeable components ensure long-term flexibility.
@@ -18,7 +18,7 @@ Welcome to **StarkStake**, a cutting-edge liquid staking protocol built on Stark
 ## Repository Structure 📂
 
 ```plaintext
-StarkStake/
+starkstake_/
 ├── Scarb.lock
 ├── Scarb.toml
 ├── package-lock.json
@@ -54,7 +54,7 @@ StarkStake/
 ### Key Files and Directories 📁
 
 - `contracts/`: Contains the main contract files (`stark_stake.cairo`, `delegator.cairo`, etc.).
-- `scripts/deploy.js`: Deployment script for deploying contracts to the StarkNet network.
+- `scripts/deploy.js`: Deployment script for deploying contracts to the Starknet network.
 - `interfaces/`: Interface files to standardize external contract interactions.
 - `utils/constants.cairo`: Shared constants used across contracts.
 - `tests/`: Unit tests and mocks for validating contract logic.
@@ -67,7 +67,7 @@ StarkStake/
 
    ```bash
    git clone https://github.com/Doorlabs-dev/starkstake_.git
-   cd StarkStake
+   cd starkstake_
    ```
 
 2. **Install Dependencies**:
@@ -139,7 +139,7 @@ This project is licensed under the [MIT License](LICENSE).
 
 ## Security Audit 🔒
 
-The StarkStake protocol has undergone a thorough security audit by **Nethermind Security** to ensure the reliability and robustness of its smart contracts. The audit validates compliance with industry standards and highlights our commitment to providing a secure staking solution. The full audit report is available upon request.
+The starkstake_ protocol has undergone a thorough security audit by **Nethermind Security** to ensure the reliability and robustness of its smart contracts. The audit validates compliance with industry standards and highlights our commitment to providing a secure staking solution. The full audit report is available upon request.
 
 ---
 
