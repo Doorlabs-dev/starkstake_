@@ -1,83 +1,156 @@
+# StarkStake 🪙
 
-# starkstake_
+Welcome to **StarkStake**, a cutting-edge liquid staking protocol built on StarkNet. This repository contains the core contracts and deployment scripts to facilitate decentralized and efficient staking, liquid staking token issuance, and delegator management.
 
-starkstake_ is a liquid staking protocol built on Starknet. It enables users to stake STRK tokens and receive liquid staking tokens (staked_strk_token) in return. These tokens can be traded, used in DeFi, or redeemed for the underlying STRK tokens after a withdrawal request.
+---
 
-## Project Structure
+## Features ✨
 
-```
-.
+- **Liquid Staking**: Stake your STRK tokens and receive `stSTRK`, a liquid staking token (LST) compliant with ERC-20 standards.
+- **Delegator Management**: Interact with StarkNet's staking pool through 22 dynamically managed delegator contracts.
+- **Modular Architecture**: Built with extensibility and security in mind using OpenZeppelin components.
+- **Reward Distribution**: Automated reward distribution with customizable fee ratios.
+- **Upgradable Contracts**: Upgradeable components ensure long-term flexibility.
+- **Robust Security**: Role-based access control, reentrancy protection, and pausable contracts for enhanced stability.
+
+---
+
+## Repository Structure 📂
+
+```plaintext
+StarkStake/
 ├── Scarb.lock
 ├── Scarb.toml
 ├── package-lock.json
 ├── package.json
+├── readme.md
 ├── scripts
-│   └── deploy.js             # Deployment scripts
+│   └── deploy.js
 └── src
     ├── components
-    │   └── access_control.cairo # Role-based access control component
+    │   └── access_control.cairo
     ├── contracts
-    │   ├── delegator.cairo    # Delegator contract for managing validator delegation
-    │   ├── staked_strk_token.cairo       # Liquid staking token (staked_strk_token) contract
-    │   ├── stark_stake.cairo  # Main liquid staking protocol contract
+    │   ├── delegator.cairo
+    │   ├── staked_strk_token.cairo
+    │   ├── stark_stake.cairo
     │   └── tests
+    │       ├── integration_test.cairo
     │       ├── mock
-    │       │   ├── pool.cairo # Mock pool contract for testing
+    │       │   ├── pool.cairo
     │       │   ├── staking.cairo
     │       │   └── strk.cairo
-    │       ├── stark_stake_test.cairo # Unit tests for stark_stake contract
-    │       └── unit_test.cairo
+    │       ├── stark_stake_test.cairo
+    │       └── test_utils.cairo
     ├── interfaces
-    │   ├── i_delegator.cairo   # Interface for the Delegator contract
-    │   ├── i_staked_strk_token.cairo      # Interface for staked_strk_token contract
-    │   ├── i_stark_stake.cairo # Interface for the StarkStake contract
-    │   └── i_starknet_staking.cairo # Interface for Starknet staking pool
+    │   ├── i_delegator.cairo
+    │   ├── i_staked_strk_token.cairo
+    │   ├── i_stark_stake.cairo
+    │   └── i_starknet_staking.cairo
     ├── lib.cairo
     └── utils
-        └── constants.cairo     # Common constants used across contracts
+        └── constants.cairo
 ```
 
-## Core Contracts
+### Key Files and Directories 📁
 
-- **StarkStake**: The main contract managing the liquid staking process. Users can deposit STRK tokens and request withdrawals.
-- **staked_strk_token**: The liquid staking token representing a user's share in the protocol. It rebases based on the rewards distributed.
-- **Delegator**: Manages the delegation of tokens to the Starknet staking pool and handles rewards collection and withdrawal requests.
+- `contracts/`: Contains the main contract files (`stark_stake.cairo`, `delegator.cairo`, etc.).
+- `scripts/deploy.js`: Deployment script for deploying contracts to the StarkNet network.
+- `interfaces/`: Interface files to standardize external contract interactions.
+- `utils/constants.cairo`: Shared constants used across contracts.
+- `tests/`: Unit tests and mocks for validating contract logic.
 
-## Installation
+---
 
-1. Clone the repository:
+## Installation & Setup 🛠️
+
+1. **Clone the Repository**:
+
    ```bash
-   git clone https://github.com/Doorlabs-dev/starkstake_
+   git clone https://github.com/Doorlabs-dev/starkstake_.git
+   cd StarkStake
    ```
 
-2. Install dependencies:
+2. **Install Dependencies**:
+
    ```bash
    npm install
    ```
 
-3. Compile the Cairo contracts:
+3. **Configure Environment Variables**:
+   Create a `.env` file in the root directory and add the following variables:
+
+   ```plaintext
+   RPC_URL=https://your-starknet-rpc-url
+   ACCOUNT_ADDRESS=your-account-address
+   PRIVATE_KEY=your-private-key
+   STRK_TOKEN_ADDRESS=strk-token-address
+   POOL_CONTRACT_ADDRESS=pool-contract-address
+   PLATFORM_FEE_RECIPIENT=your-fee-recipient-address
+   ADMIN_ADDRESS=your-admin-address
+   OPERATOR_ADDRESS=your-operator-address
+   ```
+
+4. **Build Contracts**:
+   Use Scarb to compile Cairo contracts:
+
    ```bash
    scarb build
    ```
 
-## Deployment
+---
 
-To deploy the contracts, run the deployment script:
+## Deployment 🚀
 
-```bash
-node scripts/deploy.js
-```
+1. Run the deployment script:
 
-Make sure to configure the script with the appropriate contract addresses and deployment parameters.
+   ```bash
+   node scripts/deploy.js
+   ```
 
-## Testing
+2. Check the `.deployed` file for class hashes and deployed contract addresses.
 
-Run the unit tests using Scarb:
+---
+
+## Testing 🧪
+
+Run tests using your preferred testing framework. Below is an example for running Scarb-based tests:
 
 ```bash
 scarb test
 ```
 
-## License
+---
 
-This project is licensed under the MIT License.
+## Contribution 🤝
+
+We welcome contributions! Please follow these steps:
+
+1. Fork this repository.
+2. Create a new branch for your feature/bug fix.
+3. Submit a pull request.
+
+---
+
+## License 📜
+
+This project is licensed under the [MIT License](LICENSE).
+
+---
+
+## Security Audit 🔒
+
+The StarkStake protocol has undergone a thorough security audit by **Nethermind Security** to ensure the reliability and robustness of its smart contracts. The audit validates compliance with industry standards and highlights our commitment to providing a secure staking solution. The full audit report is available upon request.
+
+---
+
+## Contact 📧
+
+For questions or collaboration, feel free to contact us:
+
+- **Email**: [giwook@doorlabs.io](mailto:giwook@doorlabs.io)
+- **Twitter**: [@giwook_stark](https://twitter.com/giwook_stark)
+
+---
+
+### Let’s Build the Future of Staking Together 🚀
+
