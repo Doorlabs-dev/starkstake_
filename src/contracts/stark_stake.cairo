@@ -66,7 +66,7 @@ mod StarkStake {
         delegator_status: Map<u8, (bool, u64)>, // (available_time)
         withdrawal_requests: Map<(ContractAddress, u32), WithdrawalRequest>,
         next_withdrawal_request_id: Map<ContractAddress, u32>,
-        pending_withdrawal_request_id: Map<ContractAddress, u32>, 
+        pending_withdrawal_request_id: Map<ContractAddress, u32>,
         delegator_class_hash: ClassHash,
         platform_fee_recipient: ContractAddress,
         min_deposit_amount: u256,
@@ -213,13 +213,8 @@ mod StarkStake {
         ///
         /// The amount of shares minted
         fn mint(ref self: ContractState, shares: u256, receiver: ContractAddress) -> u256 {
-            self.pausable.assert_not_paused();
-            self.reentrancy_guard.start();
-
             let assets = self.preview_mint(shares);
-            
             self.deposit(assets, receiver);
-
             assets
         }
 
@@ -259,11 +254,9 @@ mod StarkStake {
         ///
         /// The amount of assets sent
         /// // TODO: mod to fit with ERC7540 standard
-        fn withdraw(
-            ref self: ContractState
-        ) -> u256 {
-            // combined with staked_strk_token contract's withdraw funcion and stark_stake's withdraw function
-            // some modificaion needed
+        fn withdraw(ref self: ContractState) -> u256 {
+            // combined with staked_strk_token contract's withdraw funcion and stark_stake's
+            // withdraw function some modificaion needed
             self.pausable.assert_not_paused();
             self.reentrancy_guard.start();
 
@@ -273,7 +266,6 @@ mod StarkStake {
 
             assert(total_assets_to_withdraw > 0, 'No withdrawable requests');
 
-            
             let strk_token = IERC20Dispatcher { contract_address: self.strk_token.read() };
             strk_token.transfer(caller, total_assets_to_withdraw);
 
@@ -512,11 +504,12 @@ mod StarkStake {
 
             // burn
             staked_strk_token.transfer_from(caller, get_contract_address(), shares);
-            IStakedStrkTokenDispatcher {contract_address: self.staked_strk_token.read()}.burn(shares);
-            
+            IStakedStrkTokenDispatcher { contract_address: self.staked_strk_token.read() }
+                .burn(shares);
+
             //change total assets for exchange ratio
             self.total_assets.write(self.total_assets.read() - assets);
-            
+
             (assets, withdrawal_time)
         }
 
@@ -531,7 +524,11 @@ mod StarkStake {
             let current_time = get_block_timestamp();
             let mut total_assets_to_withdraw: u256 = 0;
 
-            let requests = self.get_available_withdrawal_requests(caller);
+            let requests = if (self.get_available_withdrawal_requests(caller).is_empty()) {
+                0
+            } else {
+                self.get_available_withdrawal_requests(caller)
+            };
             let mut last_processed_id: u32 = 0;
 
             for (
@@ -542,7 +539,9 @@ mod StarkStake {
 
                 total_assets_to_withdraw += request.assets;
 
-                if last_processed_id < request_id { last_processed_id = request_id }; 
+                if last_processed_id < request_id {
+                    last_processed_id = request_id
+                };
             };
             self.pending_withdrawal_request_id.write(caller, last_processed_id);
 
@@ -950,7 +949,10 @@ mod StarkStake {
             if self.total_assets() == 0 {
                 assets * INITIAL_SHARES_PER_ASSET
             } else {
-                (assets * IERC20Dispatcher{ contract_address: self.staked_strk_token.read() }.total_supply()) / self.total_assets()
+                (assets
+                    * IERC20Dispatcher { contract_address: self.staked_strk_token.read() }
+                        .total_supply())
+                    / self.total_assets()
             }
         }
 
@@ -964,10 +966,13 @@ mod StarkStake {
         ///
         /// The equivalent amount of assets
         fn convert_to_assets(self: @ContractState, shares: u256) -> u256 {
-            if (IERC20Dispatcher{ contract_address: self.staked_strk_token.read() }.total_supply()) == 0 {
+            if (IERC20Dispatcher { contract_address: self.staked_strk_token.read() }
+                .total_supply()) == 0 {
                 shares / INITIAL_SHARES_PER_ASSET
             } else {
-                (shares * self.total_assets()) / IERC20Dispatcher{ contract_address: self.staked_strk_token.read() }.total_supply()
+                (shares * self.total_assets())
+                    / IERC20Dispatcher { contract_address: self.staked_strk_token.read() }
+                        .total_supply()
             }
         }
 
@@ -1014,7 +1019,9 @@ mod StarkStake {
             if self.pausable.is_paused() {
                 0
             } else {
-                Bounded::<u256>::MAX - IERC20Dispatcher{ contract_address: self.staked_strk_token.read() }.total_supply()
+                Bounded::<u256>::MAX
+                    - IERC20Dispatcher { contract_address: self.staked_strk_token.read() }
+                        .total_supply()
             }
         }
 
@@ -1028,11 +1035,16 @@ mod StarkStake {
         ///
         /// The amount of assets that would be need to mint `share` amount
         fn preview_mint(self: @ContractState, shares: u256) -> u256 {
-            if (IERC20Dispatcher{ contract_address: self.staked_strk_token.read() }.total_supply()) == 0 {
+            if (IERC20Dispatcher { contract_address: self.staked_strk_token.read() }
+                .total_supply()) == 0 {
                 shares / INITIAL_SHARES_PER_ASSET
             } else {
-                (shares * self.total_assets() + IERC20Dispatcher{ contract_address: self.staked_strk_token.read() }.total_supply() - 1)
-                    / IERC20Dispatcher{ contract_address: self.staked_strk_token.read() }.total_supply()
+                (shares * self.total_assets()
+                    + IERC20Dispatcher { contract_address: self.staked_strk_token.read() }
+                        .total_supply()
+                    - 1)
+                    / IERC20Dispatcher { contract_address: self.staked_strk_token.read() }
+                        .total_supply()
             }
         }
 
@@ -1049,7 +1061,11 @@ mod StarkStake {
             if self.pausable.is_paused() {
                 0
             } else {
-                self.convert_to_assets(IERC20Dispatcher{ contract_address: self.staked_strk_token.read() }.balance_of(owner))
+                self
+                    .convert_to_assets(
+                        IERC20Dispatcher { contract_address: self.staked_strk_token.read() }
+                            .balance_of(owner)
+                    )
             }
         }
 
@@ -1066,7 +1082,12 @@ mod StarkStake {
             if self.total_assets() == 0 {
                 0
             } else {
-                (assets * IERC20Dispatcher{ contract_address: self.staked_strk_token.read() }.total_supply() + self.total_assets() - 1) / self.total_assets()
+                (assets
+                    * IERC20Dispatcher { contract_address: self.staked_strk_token.read() }
+                        .total_supply()
+                    + self.total_assets()
+                    - 1)
+                    / self.total_assets()
             }
         }
 
@@ -1083,7 +1104,8 @@ mod StarkStake {
             if self.pausable.is_paused() {
                 0
             } else {
-                IERC20Dispatcher{ contract_address: self.staked_strk_token.read() }.balance_of(owner)
+                IERC20Dispatcher { contract_address: self.staked_strk_token.read() }
+                    .balance_of(owner)
             }
         }
 
@@ -1108,8 +1130,10 @@ mod StarkStake {
         fn shares_per_asset(self: @ContractState) -> u256 {
             if self.total_assets() == 0 {
                 INITIAL_SHARES_PER_ASSET
-            } else { 
-                (IERC20Dispatcher{ contract_address: self.staked_strk_token.read() }.total_supply() * 1_000_000_000_000_000_000) / self.total_assets()
+            } else {
+                (IERC20Dispatcher { contract_address: self.staked_strk_token.read() }.total_supply()
+                    * 1_000_000_000_000_000_000)
+                    / self.total_assets()
             }
         }
 
@@ -1181,6 +1205,8 @@ mod StarkStake {
                 let request = self.withdrawal_requests.read((user, request_id));
                 if current_time >= request.withdrawal_time {
                     total_withdrawable += request.assets;
+                } else {
+                    break;
                 }
                 if request_id == next_withdrawal_request_id - 1 {
                     break;
@@ -1215,9 +1241,9 @@ mod StarkStake {
 
             loop {
                 let request = self.withdrawal_requests.read((user, request_id));
-                
+
                 requests.append(request);
-                
+
                 if request_id == next_withdrawal_request_id - 1 {
                     break;
                 }
@@ -1254,6 +1280,8 @@ mod StarkStake {
                 let request = self.withdrawal_requests.read((user, request_id));
                 if current_time >= request.withdrawal_time {
                     available_requests.append((request_id, request));
+                } else {
+                    break;
                 }
                 if request_id == next_withdrawal_request_id - 1 {
                     break;
