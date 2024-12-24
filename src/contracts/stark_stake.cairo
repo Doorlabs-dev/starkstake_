@@ -525,7 +525,7 @@ mod StarkStake {
             let mut total_assets_to_withdraw: u256 = 0;
 
             let requests = if (self.get_available_withdrawal_requests(caller).is_empty()) {
-                0
+                return 0;
             } else {
                 self.get_available_withdrawal_requests(caller)
             };
