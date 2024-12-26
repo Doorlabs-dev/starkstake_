@@ -543,7 +543,7 @@ mod StarkStake {
                     last_processed_id = request_id
                 };
             };
-            self.pending_withdrawal_request_id.write(caller, last_processed_id);
+            self.pending_withdrawal_request_id.write(caller, last_processed_id + 1);
 
             total_assets_to_withdraw
         }
